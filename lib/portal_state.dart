@@ -495,15 +495,19 @@ final class PortalController extends ChangeNotifier {
       submissions = const [];
       return;
     }
+    final cohortId = _selectedCohortId;
     final values = await Future.wait([
-      _api.get('/api/v1/assignments/', query: const {'page_size': 100}),
+      _api.get(
+        '/api/v1/assignments/',
+        query: {'page_size': 100, if (isParent) 'cohort': ?cohortId},
+      ),
       _api.get(
         '/api/v1/assignments/submissions/',
         query: const {'page_size': 100},
       ),
     ]);
     assignments = values[0].rows;
-    submissions = values[1].rows;
+    submissions = _selectedStudentRows(values[1].rows);
   }
 
   Future<void> _loadSchedule() async {
@@ -553,17 +557,21 @@ final class PortalController extends ChangeNotifier {
   }
 
   Future<void> _loadAttendance() async {
+    final studentId = selectedStudentId;
     final values = await Future.wait([
       _api.get(
         '/api/v1/attendance/records/',
-        query: const {'page_size': 100, 'ordering': '-created_at'},
+        query: {
+          'page_size': 100,
+          'ordering': '-created_at',
+          if (isParent) 'student': ?studentId,
+        },
       ),
       if (terms.isEmpty)
         _api.get('/api/v1/schedule/terms/', query: const {'page_size': 100}),
     ]);
     attendance = values[0].rows;
     if (terms.isEmpty && values.length > 1) terms = values[1].rows;
-    final studentId = selectedStudentId;
     final currentTerm = terms
         .where((item) => item['is_current'] == true)
         .firstOrNull;
@@ -579,14 +587,22 @@ final class PortalController extends ChangeNotifier {
   }
 
   Future<void> _loadAcademics() async {
+    final studentId = selectedStudentId;
+    final cohortId = _selectedCohortId;
     final values = await Future.wait([
       _api.get('/api/v1/academics/subjects/', query: const {'page_size': 100}),
       _api.get(
         '/api/v1/academics/exam-types/',
         query: const {'page_size': 100},
       ),
-      _api.get('/api/v1/academics/exams/', query: const {'page_size': 100}),
-      _api.get('/api/v1/academics/grades/', query: const {'page_size': 100}),
+      _api.get(
+        '/api/v1/academics/exams/',
+        query: {'page_size': 100, if (isParent) 'cohort': ?cohortId},
+      ),
+      _api.get(
+        '/api/v1/academics/grades/',
+        query: {'page_size': 100, if (isParent) 'student': ?studentId},
+      ),
       _api.get(
         '/api/v1/academics/transcripts/',
         query: const {'page_size': 100},
@@ -597,8 +613,8 @@ final class PortalController extends ChangeNotifier {
     subjects = values[0].rows;
     examTypes = values[1].rows;
     exams = values[2].rows;
-    grades = values[3].rows;
-    transcripts = values[4].rows;
+    grades = _selectedStudentRows(values[3].rows);
+    transcripts = _selectedStudentRows(values[4].rows);
     if (terms.isEmpty && values.length > 5) terms = values[5].rows;
   }
 
@@ -699,17 +715,23 @@ final class PortalController extends ChangeNotifier {
   }
 
   Future<void> _loadAchievements() async {
-    achievementGrants = (await _api.get(
-      '/api/v1/achievements/mine/',
-      query: const {'page_size': 100},
-    )).rows;
+    achievementGrants = _selectedStudentRows(
+      (await _api.get(
+        '/api/v1/achievements/mine/',
+        query: const {'page_size': 100},
+      )).rows,
+    );
   }
 
   Future<void> _loadDiscipline() async {
+    final studentId = selectedStudentId;
     final values = await Future.wait([
       _api.get('/api/v1/rulebook/rules/mine/'),
       _api.get('/api/v1/rulebook/rules/pending/'),
-      _api.get('/api/v1/rulebook/penalties/', query: const {'page_size': 100}),
+      _api.get(
+        '/api/v1/rulebook/penalties/',
+        query: {'page_size': 100, if (isParent) 'student': ?studentId},
+      ),
     ]);
     rules = values[0].rows;
     pendingRules = values[1].rows;
@@ -1022,6 +1044,33 @@ final class PortalController extends ChangeNotifier {
             'display_name',
             'username',
           ], fallback: 'Kontakt');
+  }
+
+  int? get _selectedCohortId {
+    if (isStudent) return _integer(profile['current_cohort']);
+    final child = children
+        .where((item) => _integer(item['id']) == selectedStudentId)
+        .firstOrNull;
+    return _integer(child?['current_cohort']);
+  }
+
+  List<Map<String, Object?>> _selectedStudentRows(
+    List<Map<String, Object?>> rows,
+  ) {
+    if (!isParent || selectedStudentId == null) return rows;
+    return [
+      for (final row in rows)
+        if (_rowStudentId(row) case final id? when id == selectedStudentId)
+          row
+        else if (_rowStudentId(row) == null)
+          row,
+    ];
+  }
+
+  int? _rowStudentId(Map<String, Object?> row) {
+    final raw = row['student'] ?? row['student_id'];
+    if (raw is Map) return _integer(raw['id']);
+    return _integer(raw);
   }
 
   String threadTitle(Map<String, Object?> thread) {

@@ -215,6 +215,136 @@ void main() {
   );
 
   test(
+    'parent domain requests and rows stay scoped to the selected child',
+    () async {
+      final api = StarForgeApi(
+        baseUrl: 'https://demo.example.uz',
+        client: MockClient((request) async {
+          final path = request.url.path;
+          if (path.endsWith('/auth/role-login/')) {
+            return _ok({
+              'access': 'parent-session',
+              'role': 'parent',
+              'must_change_password': false,
+            });
+          }
+          if (path.endsWith('/users/me/')) {
+            return _ok({
+              'id': 3,
+              'principal_kind': 'parent',
+              'full_name': 'Demo Parent',
+              'permission_codes': [
+                'assignments:read',
+                'attendance:read',
+                'academics:read',
+                'achievements:read',
+                'penalty:read',
+              ],
+            });
+          }
+          if (path.endsWith('/parents/me/children/')) {
+            return _ok([
+              {'id': 37, 'full_name': 'Selected Child', 'current_cohort': 9},
+              {'id': 38, 'full_name': 'Other Child', 'current_cohort': 10},
+            ]);
+          }
+          if (path.endsWith('/parents/me/children/37/report/')) return _ok({});
+          if (path.endsWith('/notifications/unread-count/')) {
+            return _ok({'count': 0});
+          }
+          if (path.endsWith('/assignments/')) {
+            expect(request.url.queryParameters['cohort'], '9');
+            return _ok([
+              {'id': 1, 'cohort': 9},
+            ]);
+          }
+          if (path.endsWith('/assignments/submissions/')) {
+            return _ok([
+              {'id': 11, 'student': 37},
+              {'id': 12, 'student': 38},
+            ]);
+          }
+          if (path.endsWith('/attendance/records/')) {
+            expect(request.url.queryParameters['student'], '37');
+            return _ok([
+              {'id': 21, 'student': 37},
+            ]);
+          }
+          if (path.endsWith('/schedule/terms/')) {
+            return _ok([
+              {'id': 4, 'is_current': true},
+            ]);
+          }
+          if (path.endsWith('/attendance/summary/')) {
+            expect(request.url.queryParameters['student'], '37');
+            expect(request.url.queryParameters['term'], '4');
+            return _ok({'student': 37});
+          }
+          if (path.endsWith('/academics/subjects/')) return _ok([]);
+          if (path.endsWith('/academics/exam-types/')) return _ok([]);
+          if (path.endsWith('/academics/exams/')) {
+            expect(request.url.queryParameters['cohort'], '9');
+            return _ok([]);
+          }
+          if (path.endsWith('/academics/grades/')) {
+            expect(request.url.queryParameters['student'], '37');
+            return _ok([
+              {'id': 31, 'student': 37},
+              {'id': 32, 'student': 38},
+            ]);
+          }
+          if (path.endsWith('/academics/transcripts/')) {
+            return _ok([
+              {'id': 41, 'student': 37},
+              {'id': 42, 'student': 38},
+            ]);
+          }
+          if (path.endsWith('/achievements/mine/')) {
+            return _ok([
+              {'id': 51, 'student': 37},
+              {'id': 52, 'student': 38},
+            ]);
+          }
+          if (path.endsWith('/rulebook/rules/mine/')) return _ok([]);
+          if (path.endsWith('/rulebook/rules/pending/')) return _ok([]);
+          if (path.endsWith('/rulebook/penalties/')) {
+            expect(request.url.queryParameters['student'], '37');
+            return _ok([
+              {'id': 61, 'student': 37},
+            ]);
+          }
+          return http.Response('not found', 404);
+        }),
+      );
+      final portal = PortalController(api: api, restoreSession: false);
+      addTearDown(portal.dispose);
+
+      expect(
+        await portal.login(
+          baseUrl: 'https://demo.example.uz',
+          username: 'demo.parent',
+          password: 'secret',
+        ),
+        isTrue,
+      );
+
+      await portal.loadSection(PortalSection.assignments);
+      await portal.loadSection(PortalSection.attendance);
+      await portal.loadSection(PortalSection.academics);
+      await portal.loadSection(PortalSection.achievements);
+      await portal.loadSection(PortalSection.discipline);
+
+      expect(portal.assignments.single['cohort'], 9);
+      expect(portal.submissions.map((row) => row['student']), [37]);
+      expect(portal.attendanceSummary['student'], 37);
+      expect(portal.grades.map((row) => row['student']), [37]);
+      expect(portal.transcripts.map((row) => row['student']), [37]);
+      expect(portal.achievementGrants.map((row) => row['student']), [37]);
+      expect(portal.penalties.map((row) => row['student']), [37]);
+    },
+  );
+
+  test(
     'messaging sends backend attachment keys and refreshes the thread',
     () async {
       Map<String, dynamic>? sentBody;

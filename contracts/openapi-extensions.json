@@ -1,0 +1,25 @@
+{
+  "description": "Documented frontend API extensions that are implemented by the deployed StarForge EDU API but are absent from the generated OpenAPI snapshot.",
+  "operations": [
+    {
+      "method": "GET",
+      "path": "/api/v1/messaging/contacts/",
+      "reason": "Loads the role-scoped recipient directory for new student and parent conversations."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/messaging/attachments/upload-url/",
+      "reason": "Creates a scoped upload grant for message files and voice notes."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/messaging/threads/{pk}/attachments/download/",
+      "reason": "Creates a participant-scoped temporary attachment download URL."
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/messaging/threads/{pk}/preferences/",
+      "reason": "Updates the current participant's notification mute preference."
+    }
+  ]
+}

@@ -1,0 +1,129 @@
+name: Flutter CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flutter-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: 3.44.1
+
+jobs:
+  quality:
+    name: Analyze, test, and audit API
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test tool
+
+      - name: Audit frontend calls against OpenAPI
+        run: >-
+          dart run tool/openapi_workflow_audit.dart
+          contracts/starforge-openapi.json
+          contracts/openapi-extensions.json
+          lib
+
+      - name: Analyze Dart code
+        run: flutter analyze
+
+      - name: Run tests with coverage
+        run: flutter test --coverage --concurrency=1
+
+      - name: Upload coverage
+        if: always() && hashFiles('coverage/lcov.info') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-coverage
+          path: coverage/lcov.info
+          if-no-files-found: error
+          retention-days: 14
+
+  web:
+    name: Build Web release
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Web release
+        run: >-
+          flutter build web --release
+          --dart-define=API_BASE_URL=https://starforge.78.111.91.113.nip.io
+
+      - name: Upload Web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: starforge-family-web
+          path: build/web
+          if-no-files-found: error
+          retention-days: 14
+
+  android-manifest:
+    name: Validate Android manifests
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Merge debug and release manifests
+        working-directory: android
+        run: ./gradlew :app:processDebugMainManifest :app:processReleaseMainManifest
+
+      - name: Verify required Android permissions
+        run: |
+          grep -q 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml
+          grep -q 'android.permission.RECORD_AUDIO' android/app/src/main/AndroidManifest.xml
+          grep -Rq 'android.permission.RECORD_AUDIO' build/app/intermediates/merged_manifest/debug
+          grep -Rq 'android.permission.RECORD_AUDIO' build/app/intermediates/merged_manifest/release

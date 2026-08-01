@@ -19,6 +19,7 @@ services.
 - [Quick Web start](#quick-web-start)
 - [API configuration](#api-configuration)
 - [Testing](#testing)
+- [Continuous integration](#continuous-integration)
 - [Production build](#production-build)
 - [Project structure](#project-structure)
 - [Security](#security)
@@ -193,10 +194,10 @@ This repository contains the Flutter frontend only. It does not include an API
 server, database, seed data, or account-management tools. Use an API environment
 and user account provided by your StarForge EDU deployment.
 
-The local fallback API address is:
+The default API address bundled with the frontend is:
 
 ```text
-http://demo.localhost:8000
+https://starforge.78.111.91.113.nip.io
 ```
 
 The API base URL is resolved in this order:
@@ -245,6 +246,40 @@ Update golden files only after an intentional design change:
 ```bash
 flutter test --update-goldens
 ```
+
+## Continuous integration
+
+The repository includes two GitHub Actions workflows:
+
+- `Flutter CI` runs on every push to `main`, every pull request, and manual
+  dispatch. It verifies formatting, audits every frontend API call against the
+  committed OpenAPI contract, runs static analysis and tests with coverage,
+  builds the Web release, and validates the merged Android manifests. It does
+  not build or publish an APK.
+- `Live Student and Parent API Smoke` is a manual, read-only integration check.
+  It signs in through both roles, validates each `/users/me/` projection, checks
+  the student dashboard/report and the parent's linked-child report, then probes
+  every API domain allowed by each account's `permission_codes`.
+
+The OpenAPI snapshot used by CI is stored at
+`contracts/starforge-openapi.json`. Routes implemented by the deployed API but
+missing from the generated snapshot are reviewed explicitly in
+`contracts/openapi-extensions.json`; the audit fails when an override becomes
+stale or unused.
+
+Configure the four account secrets before running the live workflow. The
+repository variable is optional and overrides the default API address:
+
+| Type | Name | Purpose |
+| --- | --- | --- |
+| Variable | `STARFORGE_API_BASE_URL` | Optional tenant API origin override, without `/api/v1` |
+| Secret | `STARFORGE_STUDENT_USERNAME` | Dedicated student smoke account |
+| Secret | `STARFORGE_STUDENT_PASSWORD` | Student smoke password |
+| Secret | `STARFORGE_PARENT_USERNAME` | Dedicated parent smoke account |
+| Secret | `STARFORGE_PARENT_PASSWORD` | Parent smoke password |
+
+The parent smoke account must have at least one active linked child. Credentials
+and opaque session keys are never printed or committed.
 
 ## Production build
 
@@ -317,6 +352,9 @@ test/
 web/                              Web manifest, icons, and loader
 android/                          Android platform wrapper
 assets/fonts/                     bundled fonts
+contracts/                        pinned OpenAPI contract and reviewed extensions
+tool/                             contract audit and live role smoke checks
+.github/workflows/                automated quality and integration workflows
 ```
 
 The regular `main()` function starts the connected API portal. The local preview
