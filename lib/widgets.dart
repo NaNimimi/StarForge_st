@@ -6,23 +6,43 @@ void sfToast(BuildContext context, String msg, {String? sub, Color? tone}) {
   final c = tone ?? Sf.ink;
   ScaffoldMessenger.of(context)
     ..clearSnackBars()
-    ..showSnackBar(SnackBar(
-      behavior: SnackBarBehavior.floating,
-      backgroundColor: Sf.ink,
-      duration: const Duration(milliseconds: 1800),
-      margin: const EdgeInsets.fromLTRB(14, 0, 14, 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      content: Row(children: [
-        Container(width: 8, height: 8, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            Text(msg, style: Sf.t(size: 13, weight: FontWeight.w700, color: Sf.bg)),
-            if (sub != null) Text(sub, style: Sf.t(size: 11, color: Sf.muted2)),
-          ]),
+    ..showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Sf.ink,
+        duration: const Duration(seconds: 3),
+        margin: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        content: Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    msg,
+                    style: Sf.t(
+                      size: 13,
+                      weight: FontWeight.w700,
+                      color: Sf.bg,
+                    ),
+                  ),
+                  if (sub != null)
+                    Text(sub, style: Sf.t(size: 11, color: Sf.muted2)),
+                ],
+              ),
+            ),
+          ],
         ),
-      ]),
-    ));
+      ),
+    );
 }
 
 /// Five-point StarForge star.
@@ -30,10 +50,19 @@ class SfStar extends StatelessWidget {
   final double size;
   final Color color;
   final Color? holeColor;
-  const SfStar({super.key, this.size = 24, this.color = Sf.ink, this.holeColor});
+  const SfStar({
+    super.key,
+    this.size = 24,
+    this.color = Sf.ink,
+    this.holeColor,
+  });
   @override
-  Widget build(BuildContext context) =>
-      CustomPaint(size: Size(size, size), painter: _StarPainter(color, holeColor));
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: CustomPaint(
+      size: Size(size, size),
+      painter: _StarPainter(color, holeColor),
+    ),
+  );
 }
 
 class _StarPainter extends CustomPainter {
@@ -45,8 +74,16 @@ class _StarPainter extends CustomPainter {
     final s = size.width / 32.0;
     final path = Path();
     const pts = [
-      [16.0, 1.0], [19.4, 11.2], [29.9, 11.5], [21.3, 17.6], [24.5, 27.9],
-      [16.0, 21.4], [7.5, 27.9], [10.7, 17.6], [2.1, 11.5], [12.6, 11.2],
+      [16.0, 1.0],
+      [19.4, 11.2],
+      [29.9, 11.5],
+      [21.3, 17.6],
+      [24.5, 27.9],
+      [16.0, 21.4],
+      [7.5, 27.9],
+      [10.7, 17.6],
+      [2.1, 11.5],
+      [12.6, 11.2],
     ];
     path.moveTo(pts[0][0] * s, pts[0][1] * s);
     for (var i = 1; i < pts.length; i++) {
@@ -55,7 +92,11 @@ class _StarPainter extends CustomPainter {
     path.close();
     canvas.drawPath(path, Paint()..color = color);
     if (holeColor != null) {
-      canvas.drawCircle(Offset(16 * s, 16 * s), 2.2 * s, Paint()..color = holeColor!);
+      canvas.drawCircle(
+        Offset(16 * s, 16 * s),
+        2.2 * s,
+        Paint()..color = holeColor!,
+      );
     }
   }
 
@@ -71,19 +112,43 @@ class Avatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final parts = name.trim().split(RegExp(r'\s+'));
-    final initials = parts.map((p) => p.isEmpty ? '' : p[0]).take(2).join().toUpperCase();
+    final initials = parts
+        .map((p) => p.isEmpty ? '' : p[0])
+        .take(2)
+        .join()
+        .toUpperCase();
     const palette = [
-      Color(0xFFB85535), Color(0xFFD89A2E), Color(0xFF4F7B3B),
-      Color(0xFF2A6F9F), Color(0xFF7A4A82), Color(0xFFA55A24), Color(0xFF3F6E5C),
+      Color(0xFFB85535),
+      Color(0xFFD89A2E),
+      Color(0xFF4F7B3B),
+      Color(0xFF2A6F9F),
+      Color(0xFF7A4A82),
+      Color(0xFFA55A24),
+      Color(0xFF3F6E5C),
     ];
     final hash = name.codeUnits.fold<int>(0, (a, c) => a + c) % palette.length;
-    return Container(
-      width: size,
-      height: size,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(color: color ?? palette[hash], shape: BoxShape.circle),
-      child: Text(initials,
-          style: Sf.t(size: size * 0.4, weight: FontWeight.w700, color: Sf.surface)),
+    return Semantics(
+      image: true,
+      label: '$name avatari',
+      child: ExcludeSemantics(
+        child: Container(
+          width: size,
+          height: size,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: color ?? palette[hash],
+            shape: BoxShape.circle,
+          ),
+          child: Text(
+            initials,
+            style: Sf.t(
+              size: size * 0.4,
+              weight: FontWeight.w700,
+              color: Sf.surface,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -94,7 +159,12 @@ class Pill extends StatelessWidget {
   final String text;
   final Tone tone;
   final bool dot;
-  const Pill(this.text, {super.key, this.tone = Tone.neutral, this.dot = false});
+  const Pill(
+    this.text, {
+    super.key,
+    this.tone = Tone.neutral,
+    this.dot = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -102,33 +172,46 @@ class Pill extends StatelessWidget {
     final bg = _soft(tone);
     return Container(
       padding: EdgeInsets.fromLTRB(dot ? 8 : 10, 4, 10, 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        if (dot) ...[
-          Container(width: 6, height: 6, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
-          const SizedBox(width: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (dot) ...[
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 6),
+          ],
+          Text(
+            text,
+            style: Sf.t(size: 11, weight: FontWeight.w700, color: c),
+          ),
         ],
-        Text(text, style: Sf.t(size: 11, weight: FontWeight.w700, color: c)),
-      ]),
+      ),
     );
   }
 
   static Color _color(Tone t) => switch (t) {
-        Tone.primary => Sf.primary,
-        Tone.success => Sf.success,
-        Tone.warn => Sf.warn,
-        Tone.danger => Sf.danger,
-        Tone.accent => Sf.accentInk,
-        Tone.neutral => Sf.muted,
-      };
+    Tone.primary => Sf.primary,
+    Tone.success => Sf.success,
+    Tone.warn => Sf.warn,
+    Tone.danger => Sf.danger,
+    Tone.accent => Sf.accentInk,
+    Tone.neutral => Sf.muted,
+  };
   static Color _soft(Tone t) => switch (t) {
-        Tone.primary => Sf.primarySoft,
-        Tone.success => Sf.successSoft,
-        Tone.warn => Sf.warnSoft,
-        Tone.danger => Sf.dangerSoft,
-        Tone.accent => Sf.accentSoft,
-        Tone.neutral => Sf.surface2,
-      };
+    Tone.primary => Sf.primarySoft,
+    Tone.success => Sf.successSoft,
+    Tone.warn => Sf.warnSoft,
+    Tone.danger => Sf.dangerSoft,
+    Tone.accent => Sf.accentSoft,
+    Tone.neutral => Sf.surface2,
+  };
 }
 
 /// Section card with header + body — matches `.fam-card`.
@@ -153,19 +236,29 @@ class SectionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
-          decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: Sf.border)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Sf.border)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Sf.t(size: 13.5, weight: FontWeight.w700),
+                  ),
+                ),
+                ?action,
+              ],
+            ),
           ),
-          child: Row(children: [
-            Expanded(child: Text(title, style: Sf.t(size: 13.5, weight: FontWeight.w700))),
-            ?action,
-          ]),
-        ),
-        Padding(padding: bodyPadding, child: child),
-      ]),
+          Padding(padding: bodyPadding, child: child),
+        ],
+      ),
     );
   }
 }
@@ -176,7 +269,13 @@ class KpiCard extends StatelessWidget {
   final String value;
   final Color valueColor;
   final IconData? icon;
-  const KpiCard({super.key, required this.label, required this.value, this.valueColor = Sf.ink, this.icon});
+  const KpiCard({
+    super.key,
+    required this.label,
+    required this.value,
+    this.valueColor = Sf.ink,
+    this.icon,
+  });
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -186,17 +285,39 @@ class KpiCard extends StatelessWidget {
         border: Border.all(color: Sf.border),
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Flexible(child: Text(label.toUpperCase(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Sf.t(size: 10.5, weight: FontWeight.w600, color: Sf.muted, letterSpacing: 0.3))),
-          if (icon != null) Icon(icon, size: 14, color: valueColor),
-        ]),
-        const SizedBox(height: 8),
-        Text(value, style: Sf.monoStyle(size: 24, weight: FontWeight.w700, color: valueColor)),
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                child: Text(
+                  label.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Sf.t(
+                    size: 10.5,
+                    weight: FontWeight.w600,
+                    color: Sf.muted,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
+              if (icon != null) Icon(icon, size: 14, color: valueColor),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: Sf.monoStyle(
+              size: 24,
+              weight: FontWeight.w700,
+              color: valueColor,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -207,42 +328,84 @@ class PageHeader extends StatelessWidget {
   final Widget title;
   final String? sub;
   final Widget? right;
-  const PageHeader({super.key, required this.eyebrow, required this.title, this.sub, this.right});
+  const PageHeader({
+    super.key,
+    required this.eyebrow,
+    required this.title,
+    this.sub,
+    this.right,
+  });
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 18),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(eyebrow.toUpperCase(), style: Sf.eyebrow()),
-            const SizedBox(height: 7),
-            DefaultTextStyle(
-              style: Sf.t(size: 30, weight: FontWeight.w800, letterSpacing: -0.9, height: 1.05),
-              child: title,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final heading = Semantics(
+            header: true,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(eyebrow.toUpperCase(), style: Sf.eyebrow()),
+                const SizedBox(height: 7),
+                DefaultTextStyle(
+                  style: Sf.t(
+                    size: constraints.maxWidth < 420 ? 25 : 30,
+                    weight: FontWeight.w800,
+                    letterSpacing: -0.9,
+                    height: 1.05,
+                  ),
+                  child: title,
+                ),
+                if (sub != null) ...[
+                  const SizedBox(height: 5),
+                  Text(sub!, style: Sf.t(size: 13, color: Sf.muted)),
+                ],
+              ],
             ),
-            if (sub != null) ...[
-              const SizedBox(height: 5),
-              Text(sub!, style: Sf.t(size: 13, color: Sf.muted)),
+          );
+          if (constraints.maxWidth < 560 && right != null) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [heading, const SizedBox(height: 12), right!],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(child: heading),
+              if (right != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 10),
+                  child: right!,
+                ),
             ],
-          ]),
-        ),
-        if (right != null) Padding(padding: const EdgeInsets.only(left: 10), child: right!),
-      ]),
+          );
+        },
+      ),
     );
   }
 }
 
 /// "Assalomu alaykum, [first]" with the name in italic serif — matches the web `FamH` title.
 Widget greetingTitle(String first) => RichText(
-      text: TextSpan(
-        style: Sf.t(size: 30, weight: FontWeight.w800, color: Sf.ink, letterSpacing: -0.9, height: 1.05),
-        children: [
-          const TextSpan(text: 'Assalomu alaykum, '),
-          TextSpan(text: first, style: Sf.serif(size: 30, color: Sf.ink)),
-        ],
+  text: TextSpan(
+    style: Sf.t(
+      size: 30,
+      weight: FontWeight.w800,
+      color: Sf.ink,
+      letterSpacing: -0.9,
+      height: 1.05,
+    ),
+    children: [
+      const TextSpan(text: 'Assalomu alaykum, '),
+      TextSpan(
+        text: first,
+        style: Sf.serif(size: 30, color: Sf.ink),
       ),
-    );
+    ],
+  ),
+);
 
 class SoftButton extends StatelessWidget {
   final String label;
@@ -250,7 +413,14 @@ class SoftButton extends StatelessWidget {
   final VoidCallback onTap;
   final bool primary;
   final Color? bg;
-  const SoftButton(this.label, {super.key, this.icon, required this.onTap, this.primary = false, this.bg});
+  const SoftButton(
+    this.label, {
+    super.key,
+    this.icon,
+    required this.onTap,
+    this.primary = false,
+    this.bg,
+  });
   @override
   Widget build(BuildContext context) {
     final isP = primary;
@@ -261,18 +431,33 @@ class SoftButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(10),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
+          constraints: const BoxConstraints(minHeight: 48),
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: isP ? Colors.transparent : Sf.border),
           ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            if (icon != null) ...[
-              Icon(icon, size: 14, color: isP ? Colors.white : Sf.ink),
-              const SizedBox(width: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 14, color: isP ? Colors.white : Sf.ink),
+                const SizedBox(width: 6),
+              ],
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Sf.t(
+                    size: 13,
+                    weight: FontWeight.w600,
+                    color: isP ? Colors.white : Sf.ink,
+                  ),
+                ),
+              ),
             ],
-            Text(label, style: Sf.t(size: 13, weight: FontWeight.w600, color: isP ? Colors.white : Sf.ink)),
-          ]),
+          ),
         ),
       ),
     );
@@ -322,54 +507,134 @@ class StarCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14 * scale),
         border: Border.all(color: border),
         boxShadow: [
-          BoxShadow(color: const Color(0x2E361E0E), blurRadius: 20 * scale, offset: Offset(0, 6 * scale)),
+          BoxShadow(
+            color: const Color(0x2E361E0E),
+            blurRadius: 20 * scale,
+            offset: Offset(0, 6 * scale),
+          ),
         ],
       ),
       clipBehavior: Clip.antiAlias,
-      child: Stack(children: [
-        Positioned(
-          right: -30 * scale,
-          top: -30 * scale,
-          child: Opacity(opacity: 0.18, child: SfStar(size: 140 * scale, color: accent)),
-        ),
-        Positioned(
-          right: -20 * scale,
-          bottom: -20 * scale,
-          child: Opacity(opacity: 0.08, child: SfStar(size: 100 * scale, color: accent)),
-        ),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text(up ? '↑ UP CARD' : '↓ DOWN CARD',
-                style: Sf.t(size: 9 * scale, weight: FontWeight.w700, color: accent, letterSpacing: 1.4 * scale)),
-            SfStar(size: 18 * scale, color: accent),
-          ]),
-          SizedBox(height: 8 * scale),
-          Text(typeName, maxLines: 1, overflow: TextOverflow.ellipsis, style: Sf.serif(size: 22 * scale, color: inkC, height: 1.05)),
-          SizedBox(height: 10 * scale),
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 8 * scale, vertical: 4 * scale),
-            decoration: BoxDecoration(color: chip, borderRadius: BorderRadius.circular(6 * scale)),
-            child: Text(recipient, style: Sf.t(size: 10 * scale, weight: FontWeight.w600, color: accent)),
-          ),
-          const Spacer(),
-          if (reason.isNotEmpty)
-            Flexible(
-              child: Container(
-                padding: EdgeInsets.only(left: 8 * scale),
-                decoration: BoxDecoration(border: Border(left: BorderSide(color: accent, width: 2 * scale))),
-                child: Text('“$reason”',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Sf.t(size: 11 * scale, color: inkC, style: FontStyle.italic, height: 1.4)),
-              ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -30 * scale,
+            top: -30 * scale,
+            child: Opacity(
+              opacity: 0.18,
+              child: SfStar(size: 140 * scale, color: accent),
             ),
-          SizedBox(height: 10 * scale),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Flexible(child: Text(issuer, style: Sf.monoStyle(size: 9 * scale, weight: FontWeight.w400, color: accent), overflow: TextOverflow.ellipsis)),
-            Text(when, style: Sf.monoStyle(size: 9 * scale, weight: FontWeight.w400, color: accent)),
-          ]),
-        ]),
-      ]),
+          ),
+          Positioned(
+            right: -20 * scale,
+            bottom: -20 * scale,
+            child: Opacity(
+              opacity: 0.08,
+              child: SfStar(size: 100 * scale, color: accent),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      up ? '↑ UP CARD' : '↓ DOWN CARD',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Sf.t(
+                        size: 9 * scale,
+                        weight: FontWeight.w700,
+                        color: accent,
+                        letterSpacing: 1.4 * scale,
+                      ),
+                    ),
+                  ),
+                  SfStar(size: 18 * scale, color: accent),
+                ],
+              ),
+              SizedBox(height: 8 * scale),
+              Text(
+                typeName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Sf.serif(size: 22 * scale, color: inkC, height: 1.05),
+              ),
+              SizedBox(height: 10 * scale),
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 8 * scale,
+                  vertical: 4 * scale,
+                ),
+                decoration: BoxDecoration(
+                  color: chip,
+                  borderRadius: BorderRadius.circular(6 * scale),
+                ),
+                child: Text(
+                  recipient,
+                  style: Sf.t(
+                    size: 10 * scale,
+                    weight: FontWeight.w600,
+                    color: accent,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              if (reason.isNotEmpty)
+                Flexible(
+                  child: Container(
+                    padding: EdgeInsets.only(left: 8 * scale),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        left: BorderSide(color: accent, width: 2 * scale),
+                      ),
+                    ),
+                    child: Text(
+                      '“$reason”',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Sf.t(
+                        size: 11 * scale,
+                        color: inkC,
+                        style: FontStyle.italic,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ),
+              SizedBox(height: 10 * scale),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      issuer,
+                      maxLines: 1,
+                      style: Sf.monoStyle(
+                        size: 9 * scale,
+                        weight: FontWeight.w400,
+                        color: accent,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  SizedBox(width: 4 * scale),
+                  Text(
+                    when,
+                    maxLines: 1,
+                    style: Sf.monoStyle(
+                      size: 9 * scale,
+                      weight: FontWeight.w400,
+                      color: accent,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -382,15 +647,34 @@ class AiBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Sf.aiBg1, Sf.aiBg2], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        gradient: const LinearGradient(
+          colors: [Sf.aiBg1, Sf.aiBg2],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         border: Border.all(color: Sf.aiBorder),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Text('Ai', style: Sf.serif(size: 14, color: Sf.ai)),
-        const SizedBox(width: 6),
-        Text(label.toUpperCase(), style: Sf.t(size: 11, weight: FontWeight.w700, color: Sf.ai, letterSpacing: 0.6)),
-      ]),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Ai', style: Sf.serif(size: 14, color: Sf.ai)),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label.toUpperCase(),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Sf.t(
+                size: 11,
+                weight: FontWeight.w700,
+                color: Sf.ai,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -427,23 +711,33 @@ class SfGrid extends StatelessWidget {
   final double minTile;
   final double gap;
   final int? maxCols;
-  const SfGrid({super.key, required this.children, this.minTile = 150, this.gap = 12, this.maxCols});
+  const SfGrid({
+    super.key,
+    required this.children,
+    this.minTile = 150,
+    this.gap = 12,
+    this.maxCols,
+  });
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (ctx, c) {
-      final w = c.maxWidth;
-      var cols = ((w + gap) / (minTile + gap)).floor();
-      final cap = maxCols ?? children.length;
-      cols = cols.clamp(1, cap == 0 ? 1 : cap);
-      if (cols > children.length) cols = children.length;
-      if (cols < 1) cols = 1;
-      final tile = (w - gap * (cols - 1)) / cols;
-      return Wrap(
-        spacing: gap,
-        runSpacing: gap,
-        children: [for (final ch in children) SizedBox(width: tile, child: ch)],
-      );
-    });
+    return LayoutBuilder(
+      builder: (ctx, c) {
+        final w = c.maxWidth;
+        var cols = ((w + gap) / (minTile + gap)).floor();
+        final cap = maxCols ?? children.length;
+        cols = cols.clamp(1, cap == 0 ? 1 : cap);
+        if (cols > children.length) cols = children.length;
+        if (cols < 1) cols = 1;
+        final tile = (w - gap * (cols - 1)) / cols;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final ch in children) SizedBox(width: tile, child: ch),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -465,20 +759,28 @@ class SfTwoCol extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) {
-    // Viewport-based like the CSS `@media (max-width: 1100px)` — not the local
-    // content width (which sits behind the 244px sidebar at desktop sizes).
-    if (MediaQuery.of(context).size.width <= breakpoint) {
-      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        left,
-        SizedBox(height: gap),
-        right,
-      ]);
-    }
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Expanded(flex: leftFlex, child: left),
-      SizedBox(width: gap),
-      Expanded(flex: rightFlex, child: right),
-    ]);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth <= breakpoint) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              left,
+              SizedBox(height: gap),
+              right,
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: leftFlex, child: left),
+            SizedBox(width: gap),
+            Expanded(flex: rightFlex, child: right),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -494,7 +796,10 @@ class SfCol extends StatelessWidget {
       if (i > 0) out.add(SizedBox(height: gap));
       out.add(children[i]);
     }
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: out);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: out,
+    );
   }
 }
 

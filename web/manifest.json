@@ -1,12 +1,11 @@
 {
-    "name": "starforge_student",
-    "short_name": "starforge_student",
+    "name": "StarForge EDU Family",
+    "short_name": "StarForge EDU",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#F3F5F9",
+    "theme_color": "#5968F2",
+    "description": "Interactive student and parent education dashboard.",
     "prefer_related_applications": false,
     "icons": [
         {

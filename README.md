@@ -1,19 +1,96 @@
-# starforge_student
+# StarForge Family
 
-A new Flutter project.
+Flutter-клиент кабинета ученика и родителя, подключённый к StarForge Edu
+backend. Рабочий вход выполняется через role-login, навигация строится по
+permission codes текущей сессии, а данные ребёнка и родителя загружаются только
+из разрешённых backend-проекций.
 
-## Getting Started
+## Подключённые сценарии
 
-This project is a starting point for a Flutter application.
+- вход ученика и родителя, восстановление защищённой сессии, выход;
+- восстановление и обязательная смена пароля;
+- отдельные интерфейсы ученика и родителя, полный профиль ученика, связи с
+  опекунами, разрешённые сопровождающие и история событий;
+- профиль аккаунта и устройства;
+- dashboard ученика и семейная сводка родителя с интерактивными диаграммами
+  реальных оценок и посещаемости;
+- задания, отправки текста и файлов через upload grant;
+- расписание, учебные периоды, слоты, типы занятий, правила и ссылка iCal;
+- посещаемость и сводка;
+- предметы, экзамены, оценки и табели;
+- библиотеки, курсы, модули, уроки, папки, файлы и материалы;
+- мессенджер в формате master/detail: контакты, поиск, личные/групповые
+  диалоги, непрочитанные, read/mute, вложения, расширенная emoji-панель,
+  запись и отправка настоящих голосовых сообщений, копирование сообщений и
+  создание разговора;
+- уведомления, read/read-all и настройки;
+- динамические формы и отправка ответов;
+- достижения, правила, подтверждения и штрафы;
+- карта и кошелёк ученика;
+- read-only финансовая сводка родителя.
 
-A few resources to get you started if this is your first Flutter project:
+Доступный ученику результат backend-AI показывается отдельно от оценки учителя
+в проверенной работе. Разговорный family-AI не имитируется: текущие `/ai/*`
+методы backend предназначены для сотрудников и возвращают ученику/родителю
+запрет по RBAC.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+Все разделы скрываются, если backend не выдал соответствующее право. У родителя
+используется только связанный сервером ребёнок; локального переключателя ролей и
+подмены family data в рабочем приложении нет.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-# StarForge_st
-# StarForge_st
+## Архитектура
+
+```text
+lib/
+  main.dart           точка входа production-клиента
+  portal_app.dart     login, responsive shell и маршрутизация
+  portal_identity_pages.dart  разные профили ученика и семьи
+  portal_pages.dart   страницы ученика и родителя
+  portal_visuals.dart интерактивные кольцевые и столбчатые диаграммы
+  portal_state.dart   сессия, RBAC и загрузка доменных данных
+  starforge_api.dart  HTTP-клиент, envelope/cursor contracts и secure storage
+```
+
+Старый локальный прототип сохранён как детерминированный preview для golden и
+widget-тестов. При обычном запуске `main()` всегда открывается подключённый
+клиент.
+
+## Backend и запуск
+
+По умолчанию используется локальный tenant:
+
+```text
+http://demo.localhost:8000
+```
+
+Другой адрес можно указать на экране входа в блоке `Markaz serveri` или при
+сборке:
+
+```bash
+flutter run -d web-server \
+  --web-hostname 0.0.0.0 \
+  --web-port 8081 \
+  --dart-define=API_BASE_URL=https://tenant.example.com
+```
+
+Локальные demo-аккаунты для проверки:
+
+```text
+Ученик:   demo.student32 / root
+Родитель: demo.parent01  / root
+```
+
+Для production используйте HTTPS и реальные учётные данные. Пароли не
+сохраняются; хранится только opaque session token через secure storage.
+
+## Проверка
+
+```bash
+flutter pub get
+flutter analyze
+flutter test
+flutter build web --release
+```
+
+Веб-сборка находится в `build/web` и может раздаваться любым статическим HTTP
+сервером.
