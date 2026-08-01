@@ -1,10 +1,10 @@
 # StarForge Family
 
-A student and parent web portal for the StarForge EDU platform. The application
-is built with Flutter and connects to a separate multi-tenant backend. It
-provides role-aware access to schedules, attendance, assignments, academic
-results, learning content, messaging, notifications, family information, and
-school services.
+A student and parent frontend for the StarForge EDU platform. The application
+is built with Flutter and consumes the StarForge EDU API. It provides
+role-aware access to schedules, attendance, assignments, academic results,
+learning content, messaging, notifications, family information, and school
+services.
 
 > The primary validated platform is Web. Android platform sources remain in the
 > repository, but APK files and the `build/` directory are not committed to Git.
@@ -17,9 +17,6 @@ school services.
 - [Technology stack](#technology-stack)
 - [Requirements](#requirements)
 - [Quick Web start](#quick-web-start)
-- [Backend setup](#backend-setup)
-- [Demo data](#demo-data)
-- [Adding students and parents](#adding-students-and-parents)
 - [API configuration](#api-configuration)
 - [Testing](#testing)
 - [Production build](#production-build)
@@ -31,12 +28,12 @@ school services.
 
 ### Core application
 
-- backend `role-login` authentication and session restoration;
+- API-based `role-login` authentication and session restoration;
 - mandatory temporary-password replacement;
 - responsive navigation for desktop, tablet, and mobile layouts;
 - separate student and parent portals;
 - lazy loading and manual refresh for individual data domains;
-- permission-aware navigation based on backend `permission_codes`;
+- permission-aware navigation based on API `permission_codes`;
 - explicit loading, error, empty, and populated states;
 - light theme, dark theme, larger text, and high-contrast support;
 - opaque session storage through `flutter_secure_storage`.
@@ -82,14 +79,14 @@ school services.
 ## Role-specific experience
 
 The student and parent experiences are intentionally different. The role comes
-from the authenticated backend session, while available destinations are built
-from `permission_codes` returned by the server.
+from the authenticated API session, while available destinations are built
+from `permission_codes` returned by the API.
 
 | Area | Student | Parent |
 | --- | --- | --- |
 | Home | Personal route, upcoming lessons, tasks, and results | Family overview, child status, attendance, and payments |
 | Profile | Personal information and enrollment history | Family, child, guardian, and pickup information |
-| Assignments | View and submit work | Hidden unless the backend grants the required permission |
+| Assignments | View and submit work | Hidden unless the API grants the required permission |
 | Schedule | Personal schedule | Schedule of the linked child |
 | Attendance | Personal attendance history | Attendance of the selected child |
 | Results | Personal exams, grades, and transcripts | Published academic results of the linked child |
@@ -97,9 +94,9 @@ from `permission_codes` returned by the server.
 | Messaging | Teachers and permitted group conversations | Communication with teachers and the school |
 | Finance | Student card and wallet projection | Read-only invoices and outstanding balance |
 
-A parent receives data only for children connected through an active guardian
-relationship on the backend. Knowing another student's identifier is not
-enough: backend selectors and permissions scope every request.
+A parent receives data only for children returned by the family API. Knowing
+another student's identifier is not enough: server-side selectors and
+permissions scope every request.
 
 ## How the application works
 
@@ -114,17 +111,11 @@ PortalController
   │  HTTPS / JSON / Bearer session
   ▼
 StarForge EDU API
-  │
-  ├── tenant schema
-  ├── PostgreSQL
-  ├── MinIO / S3
-  ├── Redis / Channels
-  └── background tasks
 ```
 
 Design principles:
 
-1. The backend is the source of truth for roles, permissions, and family links.
+1. The API is the source of truth for roles, permissions, and family links.
 2. The production UI does not provide a local role-switching shortcut.
 3. Each page loads only the domain data it needs.
 4. A failure in one section must not erase data already loaded elsewhere.
@@ -147,18 +138,13 @@ Design principles:
 | Instrument Serif | Editorial display headings |
 | JetBrains Mono | Dates, codes, and numeric labels |
 
-The backend is maintained in a separate repository:
-[MythicalCosmic/starforge_edu](https://github.com/MythicalCosmic/starforge_edu).
-
 ## Requirements
-
-Frontend requirements:
 
 - a Flutter release compatible with the Dart constraint in `pubspec.yaml`;
 - Firefox, Chrome, or another modern browser;
-- a running StarForge EDU backend;
-- browser access to the backend tenant hostname;
-- an available MinIO or S3 service for file workflows.
+- a reachable StarForge EDU API compatible with the contracts used by this
+  frontend;
+- browser access to the configured API hostname.
 
 Check the local Flutter installation:
 
@@ -201,120 +187,17 @@ flutter run -d web-server \
 The API address can also be changed from the `Markaz serveri` option on the
 sign-in screen.
 
-## Backend setup
+## API configuration
 
-This repository does not contain the API server, database, or user passwords.
-The backend must run separately.
+This repository contains the Flutter frontend only. It does not include an API
+server, database, seed data, or account-management tools. Use an API environment
+and user account provided by your StarForge EDU deployment.
 
-Example local backend setup:
-
-```bash
-git clone https://github.com/MythicalCosmic/starforge_edu.git
-cd starforge_edu
-cp .env.example .env
-
-docker compose -f docker/docker-compose.yml up -d postgres redis minio
-uv sync --all-groups
-uv run python manage.py migrate_schemas --shared
-uv run python scripts/seed_dev.py
-uv run python manage.py runserver 127.0.0.1:8000
-```
-
-By default, the frontend expects the local tenant API at:
+The local fallback API address is:
 
 ```text
 http://demo.localhost:8000
 ```
-
-Backend API documentation is available locally at:
-
-```text
-http://demo.localhost:8000/api/schema/swagger-ui/
-```
-
-If the UI opens but all requests fail, verify that:
-
-- the backend is listening on the expected port;
-- the tenant hostname exists;
-- the frontend origin is allowed by CORS;
-- the API is reachable from the same browser;
-- the `http` or `https` scheme is correct;
-- PostgreSQL, Redis, and MinIO are running.
-
-## Demo data
-
-The backend provides idempotent seed scripts for a populated local environment.
-They may be run repeatedly: known showcase records are updated instead of being
-duplicated.
-
-```bash
-cd starforge_edu
-PYTHONPATH=. uv run python scripts/seed_showcase.py
-uv run python scripts/seed_family_portal.py
-```
-
-The family portal seed creates connected data needed for a complete Web review:
-
-- student, parent, and guardian relationship;
-- complete profiles, emergency contacts, and enrollment history;
-- past and upcoming lessons;
-- multiple attendance states;
-- assignments, submissions, and a teacher grade;
-- subjects, exams, results, grades, and a transcript;
-- libraries, courses, modules, and learning materials;
-- real files and PDF documents stored in MinIO;
-- forms and answer fields;
-- achievements;
-- rules, acknowledgements, and penalties;
-- cards, wallet balance, and transactions;
-- invoice and outstanding balance;
-- family group chat, messages, and an attachment;
-- notifications, preferences, and devices.
-
-The seed is restricted to a local `DEBUG` environment and the `demo` tenant. It
-must not be used as a production migration.
-
-## Adding students and parents
-
-New accounts can sign in to this Web application after they have been created
-correctly on the backend. Adding only a row to a student or parent table is not
-enough.
-
-A student account requires:
-
-1. an active authentication identity;
-2. a password stored through Django's password hasher;
-3. a `StudentProfile`;
-4. a student role or account type with the required permissions;
-5. a branch;
-6. an active cohort membership when schedule, assignments, and results are
-   expected;
-7. related domain records such as lessons, attendance, grades, and content.
-
-A parent account requires:
-
-1. an active authentication identity;
-2. a password stored through Django's password hasher;
-3. a `ParentProfile`;
-4. a parent role or account type with the required permissions;
-5. an active `Guardian` relationship with at least one student;
-6. optional pickup authorizations and child finance records when those sections
-   are required.
-
-Create accounts through Django Admin, official backend APIs, or backend service
-functions. Do not write a plain password directly into a database column:
-Django must generate the password hash. Family relationships must also be
-created and validated on the backend rather than being simulated in the client.
-
-After creation, the user can sign in through the normal application screen. The
-backend returns the role and permissions, and the frontend automatically builds
-the correct portal. A parent sees only linked children; a student sees only the
-student's own academic projection.
-
-For an account in another tenant, enter that center's hostname on the sign-in
-screen. Accounts and data in different tenant schemas are isolated.
-
-## API configuration
 
 The API base URL is resolved in this order:
 
@@ -391,9 +274,7 @@ Production checklist:
 
 - use HTTPS for both frontend and API;
 - configure an explicit CORS origin allowlist;
-- do not use wildcards in production `ALLOWED_HOSTS` or CORS settings;
-- configure the real S3 or MinIO endpoint;
-- configure lifecycle cleanup for temporary upload objects;
+- allow only the intended production origins;
 - add CSP and security headers at the reverse proxy;
 - never commit passwords, session tokens, or `.env` files;
 - smoke-test both roles against a production-like tenant.
@@ -438,19 +319,19 @@ android/                          Android platform wrapper
 assets/fonts/                     bundled fonts
 ```
 
-The regular `main()` function starts the connected backend portal. The local
-preview remains available for deterministic widget and golden tests and does
-not replace production data.
+The regular `main()` function starts the connected API portal. The local preview
+remains available for deterministic widget and golden tests and does not replace
+production data.
 
 ## Security
 
 - Real usernames, passwords, and tokens must not be committed.
 - The frontend never stores the user's password.
-- The session is opaque and can be revoked by the backend.
-- Permissions are enforced by the backend; hiding a button is only an
+- The session is opaque and can be revoked by the API.
+- Permissions are enforced by the API; hiding a button is only an
   additional UX layer.
 - Upload and download links should be short-lived.
-- Parent access is determined by backend `Guardian` relationships.
+- Parent access is determined by the family relationships returned by the API.
 - Family access to exams is restricted to published records in linked cohorts.
 - Family AI features must not bypass staff-only RBAC.
 - Every new endpoint must be reviewed for tenant isolation.
@@ -464,8 +345,8 @@ inspect `/api/v1/users/me/` and the domain endpoint used by the page.
 
 ### A parent cannot see a child
 
-Verify the active `Guardian` relationship and the family endpoint response. Two
-independent profiles do not grant family access without a backend link.
+Verify that the family endpoint returns the expected linked child. Two
+independent profiles do not grant family access by themselves.
 
 ### The profile exists but schedule or grades are empty
 
@@ -474,14 +355,13 @@ record visibility rules.
 
 ### A file is listed but cannot be downloaded
 
-Check that the object exists in MinIO or S3, bucket CORS is configured, the
-public endpoint is correct, and the presigned URL has not expired.
+Check that the API returned a valid download URL, that the URL is reachable from
+the browser, and that a temporary link has not expired.
 
-### Web cannot connect to a local backend
+### Web cannot connect to the API
 
-The backend must be reachable through the tenant hostname, not only through a
-bare IP address. Confirm that the local tenant hostname opens in the same
-browser.
+Confirm that the configured API address opens in the same browser, uses the
+correct scheme and port, and permits the frontend origin through CORS.
 
 ### Frontend changes are not visible
 
@@ -513,8 +393,7 @@ Do not commit:
 - real user credentials;
 - `build/` output;
 - temporary browser profiles;
-- local database dumps;
-- MinIO or S3 access keys.
+- private API keys or signing material.
 
 When adding a page, update all relevant layers:
 
