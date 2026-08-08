@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import 'package:record/record.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_state.dart';
 import 'notification_service.dart';
+import 'platform_file_bytes.dart';
 import 'portal_state.dart';
 import 'push_notification_service.dart';
 import 'starforge_api.dart';
@@ -134,87 +134,83 @@ class _LoginScreenState extends State<_LoginScreen> {
   Widget build(BuildContext context) {
     final portal = PortalScope.of(context);
     final colors = Theme.of(context).colorScheme;
-    final form = Form(
-      key: _formKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              const _PortalBrandMark(size: 48),
-              const SizedBox(width: 13),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'STARFORGE',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      letterSpacing: 1.8,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  Text(
-                    'Family workspace',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 44),
-          Text(
-            'Kabinetga kirish',
-            style: Theme.of(context).textTheme.headlineLarge,
-          ),
-          const SizedBox(height: 9),
-          Text(
-            'O‘quv jarayoni, aloqa va oilaviy nazorat — bitta xavfsiz joyda.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyLarge?.copyWith(color: colors.onSurfaceVariant),
-          ),
-          const SizedBox(height: 30),
-          TextFormField(
-            key: const ValueKey('portal-login-username'),
-            controller: _username,
-            autofillHints: const [AutofillHints.username],
-            textInputAction: TextInputAction.next,
-            decoration: const InputDecoration(
-              labelText: 'Login',
-              hintText: 'Akkaunt logini',
-              prefixIcon: Icon(Icons.alternate_email_rounded),
+    final form = AutofillGroup(
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Kabinetga kirish',
+              style: Sf.serif(size: 31, color: colors.onSurface, height: 1.05),
             ),
-            validator: (value) =>
-                (value ?? '').trim().isEmpty ? 'Loginni kiriting' : null,
-          ),
-          const SizedBox(height: 14),
-          TextFormField(
-            key: const ValueKey('portal-login-password'),
-            controller: _password,
-            obscureText: _obscure,
-            autofillHints: const [AutofillHints.password],
-            onFieldSubmitted: (_) => _submit(),
-            decoration: InputDecoration(
-              labelText: 'Parol',
-              hintText: '••••••••',
-              prefixIcon: const Icon(Icons.lock_outline_rounded),
-              suffixIcon: IconButton(
-                tooltip: _obscure ? 'Parolni ko‘rsatish' : 'Parolni yashirish',
-                onPressed: () => setState(() => _obscure = !_obscure),
-                icon: Icon(
-                  _obscure
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
+            const SizedBox(height: 7),
+            Text(
+              'Rol va ruxsatlar serverdagi hisobingizdan avtomatik olinadi.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 20),
+            TextFormField(
+              key: const ValueKey('portal-login-username'),
+              controller: _username,
+              autofillHints: const [AutofillHints.username],
+              textInputAction: TextInputAction.next,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: const InputDecoration(
+                labelText: 'Login',
+                prefixIcon: Icon(Icons.person_outline_rounded),
+              ),
+              validator: (value) =>
+                  (value ?? '').trim().isEmpty ? 'Loginni kiriting' : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              key: const ValueKey('portal-login-password'),
+              controller: _password,
+              obscureText: _obscure,
+              autofillHints: const [AutofillHints.password],
+              textInputAction: TextInputAction.done,
+              onFieldSubmitted: (_) => _submit(),
+              decoration: InputDecoration(
+                labelText: 'Parol',
+                prefixIcon: const Icon(Icons.lock_outline_rounded),
+                suffixIcon: IconButton(
+                  tooltip: _obscure
+                      ? 'Parolni ko‘rsatish'
+                      : 'Parolni yashirish',
+                  onPressed: () => setState(() => _obscure = !_obscure),
+                  icon: Icon(
+                    _obscure
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                  ),
                 ),
               ),
+              validator: (value) =>
+                  (value ?? '').isEmpty ? 'Parolni kiriting' : null,
             ),
-            validator: (value) =>
-                (value ?? '').isEmpty ? 'Parolni kiriting' : null,
-          ),
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
+            if (portal.authenticationError case final error?) ...[
+              const SizedBox(height: 12),
+              _InlineMessage(text: error, error: true),
+            ],
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              key: const ValueKey('portal-login-submit'),
+              onPressed: portal.authenticationBusy ? null : _submit,
+              icon: portal.authenticationBusy
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.login_rounded),
+              label: Text(portal.authenticationBusy ? 'Kirilmoqda…' : 'Kirish'),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
               onPressed: portal.authenticationBusy
                   ? null
                   : () => Navigator.of(context).push(
@@ -229,193 +225,141 @@ class _LoginScreenState extends State<_LoginScreen> {
                     ),
               child: const Text('Parolni unutdingizmi?'),
             ),
-          ),
-          if (portal.authenticationError case final error?) ...[
-            _InlineMessage(text: error, error: true),
-            const SizedBox(height: 12),
+            const SizedBox(height: 4),
+            Divider(color: colors.outlineVariant),
+            const SizedBox(height: 2),
+            TextButton.icon(
+              onPressed: () => setState(() => _showServer = !_showServer),
+              icon: Icon(
+                _showServer ? Icons.expand_less_rounded : Icons.dns_outlined,
+                size: 18,
+              ),
+              label: Text(
+                _showServer ? 'Server sozlamasini yopish' : 'Markaz serveri',
+              ),
+            ),
+            AnimatedCrossFade(
+              duration: const Duration(milliseconds: 220),
+              crossFadeState: _showServer
+                  ? CrossFadeState.showSecond
+                  : CrossFadeState.showFirst,
+              firstChild: const SizedBox(width: double.infinity),
+              secondChild: Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: TextFormField(
+                  controller: _server,
+                  keyboardType: TextInputType.url,
+                  autocorrect: false,
+                  decoration: const InputDecoration(
+                    labelText: 'Server manzili',
+                    prefixIcon: Icon(Icons.language_rounded),
+                  ),
+                  validator: (value) {
+                    try {
+                      normalizeApiBaseUrl(value ?? '');
+                      return null;
+                    } on FormatException catch (error) {
+                      return error.message;
+                    }
+                  },
+                ),
+              ),
+            ),
           ],
-          FilledButton.icon(
-            key: const ValueKey('portal-login-submit'),
-            onPressed: portal.authenticationBusy ? null : _submit,
-            icon: portal.authenticationBusy
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.arrow_forward_rounded),
-            label: Text(
-              portal.authenticationBusy ? 'Kirilmoqda…' : 'Davom etish',
-            ),
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              const Expanded(child: Divider()),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  'MARKAZ SOZLAMASI',
-                  style: Sf.eyebrow(color: colors.onSurfaceVariant),
-                ),
-              ),
-              const Expanded(child: Divider()),
-            ],
-          ),
-          const SizedBox(height: 6),
-          TextButton.icon(
-            onPressed: () => setState(() => _showServer = !_showServer),
-            icon: Icon(
-              _showServer ? Icons.expand_less_rounded : Icons.dns_outlined,
-            ),
-            label: Text(_showServer ? 'Serverni yashirish' : 'Markaz serveri'),
-          ),
-          AnimatedCrossFade(
-            duration: const Duration(milliseconds: 220),
-            crossFadeState: _showServer
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
-            firstChild: const SizedBox(width: double.infinity),
-            secondChild: Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: TextFormField(
-                controller: _server,
-                keyboardType: TextInputType.url,
-                autocorrect: false,
-                decoration: const InputDecoration(
-                  labelText: 'Server manzili',
-                  hintText: 'https://markaz.example.uz',
-                  prefixIcon: Icon(Icons.language_rounded),
-                ),
-                validator: (value) {
-                  try {
-                    normalizeApiBaseUrl(value ?? '');
-                    return null;
-                  } on FormatException catch (error) {
-                    return error.message;
-                  }
-                },
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
     return Scaffold(
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 900;
-            final formPane = ColoredBox(
-              color: colors.surface,
-              child: Center(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: wide ? 64 : 22,
-                    vertical: 32,
-                  ),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 440),
-                    child: form,
-                  ),
-                ),
-              ),
-            );
-            if (!wide) return formPane;
-            return Row(
-              children: [
-                const Expanded(flex: 11, child: _LoginStoryPanel()),
-                Expanded(flex: 9, child: formPane),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _LoginStoryPanel extends StatelessWidget {
-  const _LoginStoryPanel();
-
-  @override
-  Widget build(BuildContext context) {
-    return ColoredBox(
-      color: const Color(0xFF1D1914),
-      child: Stack(
+      backgroundColor: colors.surfaceContainerLowest,
+      body: Stack(
         children: [
-          const Positioned(
-            right: -100,
-            top: -80,
-            child: _LoginOrbit(size: 440, color: Color(0xFF4F6A3A)),
-          ),
-          const Positioned(
-            left: -130,
-            bottom: -170,
-            child: _LoginOrbit(size: 390, color: Color(0xFFBA8C2C)),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(64, 58, 56, 54),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _LoginSignal(),
-                const Spacer(),
-                Text(
-                  'Ta’lim jarayoni\nendi aniq ko‘rinadi.',
-                  style: Sf.serif(
-                    size: 54,
-                    color: Colors.white,
-                    height: 1.04,
-                    italic: false,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const SizedBox(
-                  width: 540,
-                  child: Text(
-                    'Darslar, natijalar, topshiriqlar va maktab bilan muloqot — o‘quvchi va oila uchun yagona raqamli makon.',
-                    style: TextStyle(
-                      color: Color(0xFFC9C0AF),
-                      fontSize: 16,
-                      height: 1.55,
-                      fontFamily: Sf.ui,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 34),
-                const Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
+          const Positioned.fill(child: _LoginBackdrop()),
+          SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 470),
+                child: ListView(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
                   children: [
-                    _LoginFeature(
-                      icon: Icons.bolt_rounded,
-                      text: 'Tezkor holat',
+                    Row(
+                      children: [
+                        const _PortalBrandMark(size: 48),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'StarForge EDU',
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w900),
+                              ),
+                              Text(
+                                'O‘quvchi va ota-ona portali',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colors.surfaceContainer,
+                            borderRadius: BorderRadius.circular(99),
+                            border: Border.all(color: colors.outlineVariant),
+                          ),
+                          child: Text(
+                            'FAMILY',
+                            style: Sf.eyebrow(color: colors.onSurfaceVariant),
+                          ),
+                        ),
+                      ],
                     ),
-                    _LoginFeature(
-                      icon: Icons.forum_outlined,
-                      text: 'Himoyalangan chat',
+                    const SizedBox(height: 34),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: colors.surface,
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(color: colors.outlineVariant),
+                        boxShadow:
+                            Theme.of(context).brightness == Brightness.light
+                            ? Sf.shadowMd
+                            : null,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: form,
+                      ),
                     ),
-                    _LoginFeature(
-                      icon: Icons.insights_rounded,
-                      text: 'Aniq tahlil',
+                    const SizedBox(height: 14),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.verified_user_outlined,
+                          size: 15,
+                          color: Sf.success,
+                        ),
+                        const SizedBox(width: 7),
+                        Flexible(
+                          child: Text(
+                            'Rol va ruxsatlar markaz serverida tekshiriladi',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                const Spacer(),
-                const Text(
-                  'STARFORGE EDU  /  OILA PORTALI',
-                  style: TextStyle(
-                    color: Color(0xFF9E927E),
-                    fontSize: 11,
-                    letterSpacing: 2.2,
-                    fontWeight: FontWeight.w800,
-                    fontFamily: Sf.mono,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ],
@@ -424,80 +368,35 @@ class _LoginStoryPanel extends StatelessWidget {
   }
 }
 
-class _LoginSignal extends StatelessWidget {
-  const _LoginSignal();
+class _LoginBackdrop extends StatelessWidget {
+  const _LoginBackdrop();
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-    decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: 0.07),
-      borderRadius: BorderRadius.circular(99),
-      border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-    ),
-    child: const Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.shield_outlined, size: 14, color: Color(0xFFB7D29A)),
-        SizedBox(width: 8),
-        Text(
-          'XAVFSIZ KABINETGA KIRISH',
-          style: TextStyle(
-            color: Color(0xFFE4DDCE),
-            fontSize: 10,
-            letterSpacing: 1.25,
-            fontWeight: FontWeight.w800,
+  Widget build(BuildContext context) => IgnorePointer(
+    child: ClipRect(
+      child: Stack(
+        children: [
+          Positioned(
+            top: -120,
+            right: -90,
+            child: _glow(310, Sf.primary.withValues(alpha: 0.22)),
           ),
-        ),
-      ],
+          Positioned(
+            bottom: -150,
+            left: -110,
+            child: _glow(350, Sf.accent.withValues(alpha: 0.18)),
+          ),
+        ],
+      ),
     ),
   );
-}
 
-class _LoginFeature extends StatelessWidget {
-  const _LoginFeature({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-    decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: 0.08),
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 17, color: const Color(0xFFE3BD6A)),
-        const SizedBox(width: 8),
-        Text(
-          text,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _LoginOrbit extends StatelessWidget {
-  const _LoginOrbit({required this.size, required this.color});
-
-  final double size;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => Container(
+  Widget _glow(double size, Color color) => Container(
     width: size,
     height: size,
     decoration: BoxDecoration(
       shape: BoxShape.circle,
-      border: Border.all(color: color.withValues(alpha: 0.2), width: 42),
+      gradient: RadialGradient(colors: [color, color.withValues(alpha: 0)]),
     ),
   );
 }
@@ -836,6 +735,7 @@ class _PortalShell extends StatefulWidget {
 
 class _PortalShellState extends State<_PortalShell> {
   PortalSection _section = PortalSection.home;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   StreamSubscription<Map<String, dynamic>>? _notificationTapSubscription;
 
   @override
@@ -862,6 +762,7 @@ class _PortalShellState extends State<_PortalShell> {
       'attendance' => PortalSection.attendance,
       'academics' || 'grades' || 'exams' => PortalSection.academics,
       'content' || 'courses' || 'materials' => PortalSection.content,
+      'ai' || 'assistant' => PortalSection.ai,
       'forms' => PortalSection.forms,
       'achievements' => PortalSection.achievements,
       'discipline' || 'rules' || 'penalties' => PortalSection.discipline,
@@ -930,6 +831,12 @@ class _PortalShellState extends State<_PortalShell> {
             'Kutubxona',
             Icons.local_library_outlined,
           ),
+        if (portal.can('ai:read'))
+          const _PortalDestination(
+            PortalSection.ai,
+            'AI yordamchi',
+            Icons.auto_awesome_outlined,
+          ),
         if (portal.can('messaging:read'))
           const _PortalDestination(
             PortalSection.messages,
@@ -995,6 +902,12 @@ class _PortalShellState extends State<_PortalShell> {
           'O‘zlashtirish',
           Icons.query_stats_outlined,
         ),
+      if (portal.can('assignments:read'))
+        const _PortalDestination(
+          PortalSection.assignments,
+          'Farzand vazifalari',
+          Icons.assignment_outlined,
+        ),
       if (portal.can('schedule:read'))
         const _PortalDestination(
           PortalSection.schedule,
@@ -1012,6 +925,12 @@ class _PortalShellState extends State<_PortalShell> {
           PortalSection.content,
           'O‘quv materiallari',
           Icons.library_books_outlined,
+        ),
+      if (portal.can('ai:read'))
+        const _PortalDestination(
+          PortalSection.ai,
+          'AI tahlil',
+          Icons.auto_awesome_outlined,
         ),
       if (portal.can('messaging:read'))
         const _PortalDestination(
@@ -1050,6 +969,29 @@ class _PortalShellState extends State<_PortalShell> {
     ];
   }
 
+  List<_PortalDestination> _mobileDestinations(
+    PortalController portal,
+    List<_PortalDestination> destinations,
+  ) {
+    final preferred = portal.isStudent
+        ? const [
+            PortalSection.home,
+            PortalSection.assignments,
+            PortalSection.schedule,
+            PortalSection.messages,
+          ]
+        : const [
+            PortalSection.home,
+            PortalSection.identity,
+            PortalSection.attendance,
+            PortalSection.messages,
+          ];
+    return [
+      for (final section in preferred)
+        ...destinations.where((item) => item.section == section).take(1),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final portal = PortalScope.of(context);
@@ -1060,7 +1002,11 @@ class _PortalShellState extends State<_PortalShell> {
     final selected = destinations.indexWhere(
       (item) => item.section == _section,
     );
-    final wide = MediaQuery.sizeOf(context).width >= 1024;
+    final wide = MediaQuery.sizeOf(context).width >= 840;
+    final mobileDestinations = _mobileDestinations(portal, destinations);
+    final mobileSelected = mobileDestinations.indexWhere(
+      (item) => item.section == _section,
+    );
     final drawer = _PortalNavigation(
       destinations: destinations,
       selectedIndex: selected,
@@ -1068,18 +1014,34 @@ class _PortalShellState extends State<_PortalShell> {
           setState(() => _section = destinations[index].section),
     );
     final baseTheme = Theme.of(context);
-    final accent = portal.isStudent
+    final dark = baseTheme.brightness == Brightness.dark;
+    final accent = dark
+        ? (portal.isStudent
+              ? baseTheme.colorScheme.primary
+              : baseTheme.colorScheme.secondary)
+        : portal.isStudent
         ? const Color(0xFF4F6A3A)
         : const Color(0xFF8D5E2E);
-    final accentSoft = portal.isStudent
+    final accentSoft = dark
+        ? (portal.isStudent
+              ? baseTheme.colorScheme.primaryContainer
+              : baseTheme.colorScheme.secondaryContainer)
+        : portal.isStudent
         ? const Color(0xFFDBE5C7)
         : const Color(0xFFF0E1BB);
-    final accentInk = portal.isStudent
+    final accentInk = dark
+        ? (portal.isStudent
+              ? baseTheme.colorScheme.onPrimaryContainer
+              : baseTheme.colorScheme.onSecondaryContainer)
+        : portal.isStudent
         ? const Color(0xFF324D22)
         : const Color(0xFF674A0D);
+    final onAccent = dark && portal.isParent
+        ? baseTheme.colorScheme.onSecondary
+        : Colors.white;
     final roleScheme = baseTheme.colorScheme.copyWith(
       primary: accent,
-      onPrimary: Colors.white,
+      onPrimary: onAccent,
       primaryContainer: accentSoft,
       onPrimaryContainer: accentInk,
       secondary: portal.isStudent
@@ -1108,37 +1070,35 @@ class _PortalShellState extends State<_PortalShell> {
       data: roleTheme,
       child: Builder(
         builder: (roleContext) => Scaffold(
+          key: _scaffoldKey,
           drawer: wide
               ? null
               : Drawer(
                   width: 300,
-                  backgroundColor: const Color(0xFF1D1914),
+                  backgroundColor: roleScheme.surface,
                   child: SafeArea(child: drawer),
                 ),
           appBar: AppBar(
             automaticallyImplyLeading: !wide,
-            toolbarHeight: 64,
-            backgroundColor: roleScheme.surfaceContainerLowest,
-            titleSpacing: wide ? 30 : 4,
+            toolbarHeight: 60,
+            backgroundColor: roleScheme.surface,
+            shape: Border(bottom: BorderSide(color: roleScheme.outlineVariant)),
+            titleSpacing: wide ? 20 : 4,
             title: Row(
               children: [
-                if (wide) ...[
+                if (wide)
                   Text(
                     portal.isParent ? 'OILA PORTALI' : 'O‘QUVCHI PORTALI',
-                    style: Sf.eyebrow(color: roleScheme.onSurfaceVariant),
+                    style: Sf.eyebrow(color: roleScheme.primary),
                   ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12),
-                    child: Icon(Icons.chevron_right_rounded, size: 16),
+                if (!wide)
+                  Flexible(
+                    child: Text(
+                      destinations[selected].label,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(roleContext).textTheme.titleMedium,
+                    ),
                   ),
-                ],
-                Flexible(
-                  child: Text(
-                    destinations[selected].label,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(roleContext).textTheme.titleMedium,
-                  ),
-                ),
               ],
             ),
             actions: [
@@ -1229,11 +1189,21 @@ class _PortalShellState extends State<_PortalShell> {
           ),
           body: Row(
             children: [
-              if (wide) SizedBox(width: 268, child: drawer),
+              if (wide) SizedBox(width: 272, child: drawer),
               Expanded(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: roleScheme.surfaceContainerLowest,
+                    gradient: RadialGradient(
+                      center: Alignment.topRight,
+                      radius: 1.45,
+                      colors: [
+                        Color.alphaBlend(
+                          roleScheme.primary.withValues(alpha: 0.06),
+                          roleScheme.surfaceContainerLowest,
+                        ),
+                        roleScheme.surfaceContainerLowest,
+                      ],
+                    ),
                   ),
                   child: _PortalNavigationScope(
                     onNavigate: (section) => setState(() => _section = section),
@@ -1247,6 +1217,189 @@ class _PortalShellState extends State<_PortalShell> {
                 ),
               ),
             ],
+          ),
+          bottomNavigationBar: wide
+              ? null
+              : _PortalMobileNavigation(
+                  destinations: mobileDestinations,
+                  selectedIndex: mobileSelected < 0
+                      ? mobileDestinations.length
+                      : mobileSelected,
+                  onSelected: (index) {
+                    if (index >= mobileDestinations.length) {
+                      _scaffoldKey.currentState?.openDrawer();
+                      return;
+                    }
+                    setState(
+                      () => _section = mobileDestinations[index].section,
+                    );
+                  },
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PortalMobileNavigation extends StatelessWidget {
+  const _PortalMobileNavigation({
+    required this.destinations,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
+
+  final List<_PortalDestination> destinations;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final itemCount = destinations.length + 1;
+    final selected = selectedIndex.clamp(0, itemCount - 1);
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 260);
+    return SafeArea(
+      top: false,
+      child: Container(
+        key: const ValueKey('portal-bottom-navigation'),
+        height: 82,
+        padding: const EdgeInsets.fromLTRB(14, 9, 14, 9),
+        decoration: BoxDecoration(
+          color: colors.surface.withValues(alpha: 0.98),
+          border: Border(top: BorderSide(color: colors.outlineVariant)),
+          boxShadow: [
+            BoxShadow(
+              color: colors.shadow.withValues(alpha: 0.08),
+              blurRadius: 18,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final itemWidth = constraints.maxWidth / itemCount;
+            return Stack(
+              children: [
+                AnimatedPositioned(
+                  duration: duration,
+                  curve: Curves.easeOutBack,
+                  left: selected * itemWidth + 4,
+                  top: 2,
+                  width: itemWidth - 8,
+                  height: 56,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colors.primary.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: colors.primary.withValues(alpha: 0.12),
+                          blurRadius: 16,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    for (var index = 0; index < destinations.length; index++)
+                      Expanded(
+                        child: _PortalBubbleNavItem(
+                          key: ValueKey(
+                            'portal-bottom-${destinations[index].section.name}',
+                          ),
+                          icon: destinations[index].icon,
+                          label: destinations[index].label,
+                          active: selected == index,
+                          duration: duration,
+                          onTap: () => onSelected(index),
+                        ),
+                      ),
+                    Expanded(
+                      child: _PortalBubbleNavItem(
+                        key: const ValueKey('portal-bottom-more'),
+                        icon: Icons.grid_view_rounded,
+                        label: 'Barchasi',
+                        active: selected == destinations.length,
+                        duration: duration,
+                        onTap: () => onSelected(destinations.length),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _PortalBubbleNavItem extends StatelessWidget {
+  const _PortalBubbleNavItem({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.duration,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool active;
+  final Duration duration;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Semantics(
+      button: true,
+      selected: active,
+      label: label,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: AnimatedSlide(
+            duration: duration,
+            curve: Curves.easeOutBack,
+            offset: active ? const Offset(0, -0.08) : Offset.zero,
+            child: AnimatedScale(
+              duration: duration,
+              curve: Curves.easeOutBack,
+              scale: active ? 1.08 : 1,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    icon,
+                    size: active ? 24 : 21,
+                    color: active ? colors.primary : colors.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 3),
+                  AnimatedDefaultTextStyle(
+                    duration: duration,
+                    style: TextStyle(
+                      fontFamily: Sf.ui,
+                      fontSize: 10,
+                      fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                      color: active ? colors.primary : colors.onSurfaceVariant,
+                    ),
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -1268,13 +1421,33 @@ class _PortalNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final portal = PortalScope.of(context);
-    final accent = Theme.of(context).colorScheme.primary;
+    final colors = Theme.of(context).colorScheme;
+    final accent = colors.primary;
     return Material(
-      color: const Color(0xFF1D1914),
+      color: colors.surface,
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 22, 18, 18),
+          Container(
+            margin: const EdgeInsets.fromLTRB(12, 14, 12, 10),
+            padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Sf.ink,
+                  Color.alphaBlend(accent.withValues(alpha: 0.54), Sf.ink),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: accent.withValues(alpha: 0.16),
+                  blurRadius: 22,
+                  offset: const Offset(0, 9),
+                ),
+              ],
+            ),
             child: Row(
               children: [
                 const _PortalBrandMark(size: 40),
@@ -1293,8 +1466,8 @@ class _PortalNavigation extends StatelessWidget {
                       ),
                       Text(
                         portal.isParent ? 'OILA KABINETI' : 'O‘QUVCHI KABINETI',
-                        style: const TextStyle(
-                          color: Color(0xFF9E927E),
+                        style: TextStyle(
+                          color: colors.secondary,
                           fontSize: 9,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 1.8,
@@ -1306,9 +1479,10 @@ class _PortalNavigation extends StatelessWidget {
               ],
             ),
           ),
-          Divider(height: 1, color: Colors.white.withValues(alpha: 0.08)),
+          Divider(height: 1, color: colors.outlineVariant),
           Expanded(
             child: ListView.builder(
+              key: const ValueKey('portal-navigation-list'),
               padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
               itemCount: destinations.length,
               itemBuilder: (context, index) {
@@ -1345,8 +1519,8 @@ class _PortalNavigation extends StatelessWidget {
                         ),
                         child: Text(
                           group,
-                          style: const TextStyle(
-                            color: Color(0xFF66718D),
+                          style: TextStyle(
+                            color: colors.onSurfaceVariant,
                             fontSize: 9,
                             letterSpacing: 1.7,
                             fontWeight: FontWeight.w900,
@@ -1358,27 +1532,27 @@ class _PortalNavigation extends StatelessWidget {
                       child: ListTile(
                         key: ValueKey('portal-nav-${item.section.name}'),
                         selected: selected,
-                        selectedTileColor: accent,
+                        selectedTileColor: colors.primaryContainer,
                         tileColor: Colors.transparent,
                         hoverColor: selected
-                            ? accent.withValues(alpha: 0.92)
-                            : Colors.white.withValues(alpha: 0.06),
+                            ? colors.primaryContainer
+                            : colors.surfaceContainerLow,
                         focusColor: selected
-                            ? accent.withValues(alpha: 0.92)
-                            : Colors.white.withValues(alpha: 0.09),
+                            ? colors.primaryContainer
+                            : colors.surfaceContainer,
                         leading: Icon(
                           item.icon,
                           size: 20,
                           color: selected
-                              ? Colors.white
-                              : const Color(0xFF9AA4BB),
+                              ? colors.primary
+                              : colors.onSurfaceVariant,
                         ),
                         title: Text(
                           item.label,
                           style: TextStyle(
                             color: selected
-                                ? Colors.white
-                                : const Color(0xFFC8CEDD),
+                                ? colors.onPrimaryContainer
+                                : colors.onSurface,
                             fontSize: 12.5,
                             fontWeight: selected
                                 ? FontWeight.w800
@@ -1394,7 +1568,7 @@ class _PortalNavigation extends StatelessWidget {
                                 ),
                                 decoration: BoxDecoration(
                                   color: selected
-                                      ? Colors.white.withValues(alpha: 0.18)
+                                      ? colors.primary.withValues(alpha: 0.14)
                                       : accent.withValues(alpha: 0.18),
                                   borderRadius: BorderRadius.circular(99),
                                 ),
@@ -1402,7 +1576,7 @@ class _PortalNavigation extends StatelessWidget {
                                   badge > 99 ? '99+' : '$badge',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
-                                    color: selected ? Colors.white : accent,
+                                    color: accent,
                                     fontSize: 9,
                                     fontWeight: FontWeight.w900,
                                   ),
@@ -1431,9 +1605,9 @@ class _PortalNavigation extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.fromLTRB(12, 11, 6, 11),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.06),
+                color: colors.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                border: Border.all(color: colors.outlineVariant),
               ),
               child: Row(
                 children: [
@@ -1458,16 +1632,16 @@ class _PortalNavigation extends StatelessWidget {
                           portal.displayName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: colors.onSurface,
                             fontSize: 11.5,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                         Text(
                           portal.isParent ? 'Ota-ona' : 'O‘quvchi',
-                          style: const TextStyle(
-                            color: Color(0xFF8993AA),
+                          style: TextStyle(
+                            color: colors.onSurfaceVariant,
                             fontSize: 10,
                           ),
                         ),
@@ -1477,7 +1651,7 @@ class _PortalNavigation extends StatelessWidget {
                   IconButton(
                     tooltip: 'Chiqish',
                     onPressed: portal.logout,
-                    color: const Color(0xFF9AA4BB),
+                    color: colors.onSurfaceVariant,
                     icon: const Icon(Icons.logout_rounded, size: 19),
                   ),
                 ],
@@ -1499,6 +1673,7 @@ String _navigationGroup(PortalSection section, bool parent) =>
       PortalSection.academics ||
       PortalSection.content => parent ? 'FARZAND TA’LIMI' : 'O‘QISH',
       PortalSection.messages || PortalSection.notifications => 'ALOQA',
+      PortalSection.ai => parent ? 'OILA YORDAMCHISI' : 'O‘QISH YORDAMCHISI',
       PortalSection.forms ||
       PortalSection.achievements ||
       PortalSection.discipline ||
@@ -1547,6 +1722,7 @@ class _SectionHostState extends State<_SectionHost> {
       PortalSection.content => const _ContentPortalPage(),
       PortalSection.attendance => const _AttendancePortalPage(),
       PortalSection.messages => const _RebuiltMessagesPortalPage(),
+      PortalSection.ai => const _AiPortalPage(),
       PortalSection.notifications => const _NotificationsPortalPage(),
       PortalSection.forms => const _FormsPortalPage(),
       PortalSection.achievements => const _AchievementsPortalPage(),
@@ -1656,15 +1832,15 @@ class _PortalPage extends StatelessWidget {
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(
-          MediaQuery.sizeOf(context).width >= 1024 ? 32 : 16,
-          18,
-          MediaQuery.sizeOf(context).width >= 1024 ? 32 : 16,
-          40,
+          MediaQuery.sizeOf(context).width >= 840 ? 20 : 16,
+          16,
+          MediaQuery.sizeOf(context).width >= 840 ? 20 : 16,
+          32,
         ),
         children: [
           Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1360),
+              constraints: const BoxConstraints(maxWidth: 1500),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -1740,7 +1916,7 @@ class _PortalPage extends StatelessWidget {
                     const SizedBox(height: 14),
                     _InlineMessage(text: warning, error: true),
                   ],
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
                   ...children,
                 ],
               ),
@@ -1755,7 +1931,7 @@ class _PortalPage extends StatelessWidget {
 class _SectionCard extends StatelessWidget {
   const _SectionCard({
     required this.child,
-    this.padding = const EdgeInsets.all(18),
+    this.padding = const EdgeInsets.all(14),
   });
 
   final Widget child;
@@ -1764,11 +1940,12 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colors.outlineVariant),
+    return Material(
+      color: colors.surface,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: colors.outlineVariant),
       ),
       child: Padding(padding: padding, child: child),
     );
@@ -1790,32 +1967,35 @@ class _MetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return _SectionCard(
+      padding: const EdgeInsets.all(13),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 38,
-            height: 38,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
               color: colors.primaryContainer,
-              borderRadius: BorderRadius.circular(11),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, size: 19, color: colors.primary),
+            child: Icon(icon, size: 17, color: colors.primary),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Text(
             value,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w900,
-              fontFamily: Sf.ui,
+            style: Sf.monoStyle(
+              size: 21,
+              weight: FontWeight.w700,
+              color: colors.onSurface,
             ),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 6),
           Text(
-            label,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+            label.toUpperCase(),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Sf.eyebrow(color: colors.onSurfaceVariant),
           ),
         ],
       ),
@@ -1833,8 +2013,9 @@ class _ResponsiveGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        if (children.isEmpty) return const SizedBox.shrink();
         final count = (constraints.maxWidth / minWidth).floor().clamp(1, 4);
-        const gap = 16.0;
+        const gap = 10.0;
         final width = (constraints.maxWidth - gap * (count - 1)) / count;
         return Wrap(
           spacing: gap,
@@ -1864,13 +2045,21 @@ class _EmptyState extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return _SectionCard(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 30),
+        padding: const EdgeInsets.symmetric(vertical: 20),
         child: Column(
           children: [
-            Icon(icon, size: 46, color: colors.primary),
-            const SizedBox(height: 14),
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: colors.primaryContainer,
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(icon, size: 22, color: colors.primary),
+            ),
+            const SizedBox(height: 10),
             Text(title, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             Text(
               message,
               textAlign: TextAlign.center,
@@ -1999,10 +2188,15 @@ class _PortalSectionSkeleton extends StatelessWidget {
       label: 'Ma’lumotlar yuklanmoqda',
       liveRegion: true,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(32, 24, 32, 40),
+        padding: EdgeInsets.fromLTRB(
+          MediaQuery.sizeOf(context).width >= 840 ? 20 : 16,
+          16,
+          MediaQuery.sizeOf(context).width >= 840 ? 20 : 16,
+          32,
+        ),
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1360),
+            constraints: const BoxConstraints(maxWidth: 1500),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2067,17 +2261,23 @@ class _StatusPill extends StatelessWidget {
         : warning
         ? colors.onTertiaryContainer
         : colors.onSurfaceVariant;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        _statusLabel(text),
-        style: Theme.of(
-          context,
-        ).textTheme.labelSmall?.copyWith(color: foreground),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 150),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          _statusLabel(text),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: Theme.of(
+            context,
+          ).textTheme.labelSmall?.copyWith(color: foreground),
+        ),
       ),
     );
   }
@@ -2126,6 +2326,11 @@ String _dateLabel(Object? raw, {bool time = false}) {
   final hour = date.hour.toString().padLeft(2, '0');
   final minute = date.minute.toString().padLeft(2, '0');
   return '$day.$month · $hour:$minute';
+}
+
+String _compactDateLabel(Object? raw) {
+  final value = _dateLabel(raw);
+  return value.length <= 5 ? value : value.substring(0, 5);
 }
 
 String _money(Object? raw) {

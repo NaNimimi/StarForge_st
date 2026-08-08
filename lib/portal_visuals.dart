@@ -106,36 +106,16 @@ class InteractiveRingChartState extends State<InteractiveRingChart> {
               behavior: HitTestBehavior.opaque,
               onTap: _activate,
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 240),
+                duration: const Duration(milliseconds: 160),
                 curve: Curves.easeOutCubic,
-                width: diameter + 44,
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                width: diameter + 32,
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      accent.withValues(alpha: _isActive ? 0.18 : 0.11),
-                      scheme.surfaceContainerLowest,
-                      scheme.surface,
-                    ],
-                    stops: const [0, 0.52, 1],
-                  ),
-                  borderRadius: BorderRadius.circular(28),
+                  color: scheme.surface,
+                  borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: _isActive
-                        ? accent.withValues(alpha: 0.6)
-                        : scheme.outlineVariant.withValues(alpha: 0.8),
+                    color: _isActive ? accent : scheme.outlineVariant,
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _isActive
-                          ? accent.withValues(alpha: 0.2)
-                          : scheme.shadow.withValues(alpha: 0.07),
-                      blurRadius: _isActive ? 30 : 18,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
                 ),
                 child: ExcludeSemantics(
                   child: Column(
@@ -149,12 +129,6 @@ class InteractiveRingChartState extends State<InteractiveRingChart> {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: accent,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: accent.withValues(alpha: 0.45),
-                                  blurRadius: 8,
-                                ),
-                              ],
                             ),
                           ),
                           const SizedBox(width: 7),
@@ -213,12 +187,6 @@ class InteractiveRingChartState extends State<InteractiveRingChart> {
                                     border: Border.all(
                                       color: accent.withValues(alpha: 0.12),
                                     ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: accent.withValues(alpha: 0.1),
-                                        blurRadius: 18,
-                                      ),
-                                    ],
                                   ),
                                   child: Builder(
                                     builder: (context) {
@@ -255,16 +223,11 @@ class InteractiveRingChartState extends State<InteractiveRingChart> {
                                               Text(
                                                 '${(animatedValue * 100).round()}%',
                                                 maxLines: 1,
-                                                style: theme
-                                                    .textTheme
-                                                    .headlineMedium
-                                                    ?.copyWith(
-                                                      color: scheme.onSurface,
-                                                      fontWeight:
-                                                          FontWeight.w900,
-                                                      height: 0.95,
-                                                      letterSpacing: -1.1,
-                                                    ),
+                                                style: Sf.monoStyle(
+                                                  size: 21,
+                                                  weight: FontWeight.w700,
+                                                  color: scheme.onSurface,
+                                                ),
                                               ),
                                               if (!largeText) ...[
                                                 const SizedBox(height: 4),
@@ -305,7 +268,7 @@ class InteractiveRingChartState extends State<InteractiveRingChart> {
                                 padding: const EdgeInsets.all(11),
                                 decoration: BoxDecoration(
                                   color: accent.withValues(alpha: 0.09),
-                                  borderRadius: BorderRadius.circular(15),
+                                  borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                     color: accent.withValues(alpha: 0.16),
                                   ),
@@ -370,18 +333,6 @@ class _PremiumRingPainter extends CustomPainter {
     );
 
     if (progress <= 0) return;
-    final shader = SweepGradient(
-      startAngle: _top,
-      endAngle: _top + _fullCircle,
-      colors: [
-        accent.withValues(alpha: 0.58),
-        accent,
-        Color.lerp(accent, Colors.white, 0.28)!,
-      ],
-      stops: const [0, 0.68, 1],
-      transform: const GradientRotation(_top),
-    ).createShader(rect);
-
     if (active) {
       canvas.drawArc(
         arcRect,
@@ -392,8 +343,7 @@ class _PremiumRingPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = stroke + 7
           ..strokeCap = cap
-          ..color = accent.withValues(alpha: 0.09)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+          ..color = accent.withValues(alpha: 0.08),
       );
     }
 
@@ -406,7 +356,7 @@ class _PremiumRingPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = stroke
         ..strokeCap = cap
-        ..shader = shader,
+        ..color = accent,
     );
   }
 
@@ -476,19 +426,14 @@ class CompactBarChartState extends State<CompactBarChart> {
       child: _SectionCard(
         padding: EdgeInsets.zero,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Container(
-                padding: const EdgeInsets.fromLTRB(18, 16, 14, 14),
+                padding: const EdgeInsets.fromLTRB(14, 12, 12, 11),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      scheme.primary.withValues(alpha: 0.1),
-                      scheme.surfaceContainerLowest,
-                    ],
-                  ),
+                  color: scheme.surfaceContainerLow,
                   border: Border(
                     bottom: BorderSide(
                       color: scheme.outlineVariant.withValues(alpha: 0.7),
@@ -498,21 +443,17 @@ class CompactBarChartState extends State<CompactBarChart> {
                 child: Row(
                   children: [
                     Container(
-                      width: 36,
-                      height: 36,
+                      width: 32,
+                      height: 32,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [scheme.primary, scheme.tertiary],
-                        ),
-                        borderRadius: BorderRadius.circular(12),
+                        color: scheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(9),
                       ),
                       child: Icon(
                         Icons.stacked_bar_chart_rounded,
-                        size: 20,
-                        color: scheme.onPrimary,
+                        size: 17,
+                        color: scheme.primary,
                       ),
                     ),
                     const SizedBox(width: 11),
@@ -665,16 +606,16 @@ class _PremiumBarRow extends StatelessWidget {
               color: Colors.transparent,
               child: InkWell(
                 onTap: onTap,
-                borderRadius: BorderRadius.circular(17),
+                borderRadius: BorderRadius.circular(12),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   curve: Curves.easeOutCubic,
-                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 11),
+                  padding: const EdgeInsets.fromLTRB(9, 9, 9, 10),
                   decoration: BoxDecoration(
                     color: active
                         ? accent.withValues(alpha: 0.085)
                         : Colors.transparent,
-                    borderRadius: BorderRadius.circular(17),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: active
                           ? accent.withValues(alpha: 0.2)
@@ -790,23 +731,8 @@ class _PremiumBarRow extends StatelessWidget {
                                     heightFactor: 1,
                                     child: DecoratedBox(
                                       decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            accent.withValues(alpha: 0.62),
-                                            accent,
-                                          ],
-                                        ),
+                                        color: accent,
                                         borderRadius: BorderRadius.circular(99),
-                                        boxShadow: active
-                                            ? [
-                                                BoxShadow(
-                                                  color: accent.withValues(
-                                                    alpha: 0.3,
-                                                  ),
-                                                  blurRadius: 8,
-                                                ),
-                                              ]
-                                            : null,
                                       ),
                                     ),
                                   ),

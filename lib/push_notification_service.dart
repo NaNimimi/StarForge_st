@@ -130,6 +130,23 @@ String notificationRouteFromPayload(Map<String, dynamic> payload) {
       'attendance_record': 'attendance',
     };
     route = aliases[route] ?? route;
+    if (route.contains('message') || route.contains('thread')) {
+      route = 'messages';
+    } else if (route.contains('assignment') || route.contains('homework')) {
+      route = 'assignments';
+    } else if (route.contains('attendance')) {
+      route = 'attendance';
+    } else if (route.contains('schedule') || route.contains('lesson')) {
+      route = 'schedule';
+    } else if (route.contains('grade') ||
+        route.contains('exam') ||
+        route.contains('academic')) {
+      route = 'academics';
+    } else if (route.contains('payment') || route.contains('invoice')) {
+      route = 'finance';
+    } else if (route.contains('achievement') || route.contains('badge')) {
+      route = 'achievements';
+    }
     if (route.isNotEmpty) return route;
   }
   return 'notifications';

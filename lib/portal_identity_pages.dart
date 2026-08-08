@@ -30,11 +30,11 @@ class _StudentIdentityPage extends StatelessWidget {
     final birthdays = portal.birthdays;
     final statusStats = _mapEntries(stats['by_status']);
     final branchStats = _mapEntries(stats['by_branch']);
-    const studentBlue = Color(0xFF3157C8);
-    const studentCyan = Color(0xFF15A6B8);
+    final studentBlue = Theme.of(context).colorScheme.primary;
+    final studentCyan = Theme.of(context).colorScheme.secondary;
 
     if (profile.isEmpty) {
-      return const _PortalPage(
+      return _PortalPage(
         title: 'Mening profilim',
         subtitle: 'Shaxsiy o‘quv pasportingiz va markazdagi yo‘lingiz.',
         section: PortalSection.identity,
@@ -122,7 +122,7 @@ class _StudentIdentityPage extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 30),
+        const SizedBox(height: 20),
         const _IdentitySectionHeading(
           icon: Icons.badge_outlined,
           overline: 'O‘QUVCHI DOSYESI',
@@ -266,7 +266,7 @@ class _StudentIdentityPage extends StatelessWidget {
           accent: studentBlue,
         ),
         if (statusStats.isNotEmpty || branchStats.isNotEmpty) ...[
-          const SizedBox(height: 26),
+          const SizedBox(height: 20),
           const _IdentitySectionHeading(
             icon: Icons.analytics_outlined,
             overline: 'JONLI KO‘RSATKICHLAR',
@@ -282,7 +282,7 @@ class _StudentIdentityPage extends StatelessWidget {
           ),
         ],
         if (_hasEmergencyContacts(profile)) ...[
-          const SizedBox(height: 26),
+          const SizedBox(height: 20),
           const _IdentitySectionHeading(
             icon: Icons.emergency_outlined,
             overline: 'MUHIM ALOQA',
@@ -296,7 +296,7 @@ class _StudentIdentityPage extends StatelessWidget {
           ),
         ],
         if (activeReasons.isNotEmpty) ...[
-          const SizedBox(height: 26),
+          const SizedBox(height: 20),
           _IdentitySectionHeading(
             icon: Icons.explore_outlined,
             overline: 'MARKAZ KATALOGI',
@@ -309,7 +309,7 @@ class _StudentIdentityPage extends StatelessWidget {
           _EnrollmentReasonCloud(reasons: activeReasons),
         ],
         if (birthdays.isNotEmpty) ...[
-          const SizedBox(height: 26),
+          const SizedBox(height: 20),
           _IdentitySectionHeading(
             icon: Icons.cake_outlined,
             overline: 'HAMJAMIYAT',
@@ -321,7 +321,7 @@ class _StudentIdentityPage extends StatelessWidget {
           const SizedBox(height: 12),
           _BirthdayStrip(rows: birthdays),
         ],
-        const SizedBox(height: 30),
+        const SizedBox(height: 20),
         _IdentitySectionHeading(
           icon: Icons.route_rounded,
           overline: 'TARIX',
@@ -331,7 +331,7 @@ class _StudentIdentityPage extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         if (portal.studentEvents.isEmpty)
-          const _IdentityEmptyPanel(
+          _IdentityEmptyPanel(
             icon: Icons.route_outlined,
             title: 'Yo‘l endi boshlanmoqda',
             message:
@@ -362,8 +362,8 @@ class _ParentFamilyPage extends StatelessWidget {
     final activePickups = visiblePickups
         .where((item) => item['is_active'] == true)
         .length;
-    const familyTeal = Color(0xFF235B62);
-    const familyWarm = Color(0xFFC86645);
+    final familyTeal = Theme.of(context).colorScheme.primary;
+    final familyWarm = Theme.of(context).colorScheme.secondary;
 
     return _PortalPage(
       title: 'Farzandlarim',
@@ -377,7 +377,7 @@ class _ParentFamilyPage extends StatelessWidget {
       ),
       children: [
         if (parent.isEmpty)
-          const _IdentityEmptyPanel(
+          _IdentityEmptyPanel(
             icon: Icons.family_restroom_outlined,
             title: 'Ota-ona profili topilmadi',
             message:
@@ -435,12 +435,12 @@ class _ParentFamilyPage extends StatelessWidget {
               label: 'Farzand profili',
               value: '${(childProgress * 100).round()}%',
               detail: 'Ma’lumotlarning to‘liqligi',
-              accent: const Color(0xFF3C7B78),
+              accent: familyWarm,
               progress: childProgress,
             ),
           ],
         ),
-        const SizedBox(height: 30),
+        const SizedBox(height: 20),
         const _IdentitySectionHeading(
           icon: Icons.face_retouching_natural_rounded,
           overline: 'TANLANGAN FARZAND',
@@ -450,7 +450,7 @@ class _ParentFamilyPage extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         if (child.isEmpty)
-          const _IdentityEmptyPanel(
+          _IdentityEmptyPanel(
             icon: Icons.person_search_outlined,
             title: 'Farzand profili topilmadi',
             message:
@@ -461,7 +461,7 @@ class _ParentFamilyPage extends StatelessWidget {
           _ChildSpotlightCard(child: child, completeness: childProgress),
           const SizedBox(height: 14),
           _IdentityInformationPanel(
-            accent: const Color(0xFF3C7B78),
+            accent: familyWarm,
             groups: [
               _IdentityInfoGroup(
                 title: 'Shaxsiy ma’lumotlar',
@@ -598,7 +598,7 @@ class _ParentFamilyPage extends StatelessWidget {
             ),
           ],
         ],
-        const SizedBox(height: 30),
+        const SizedBox(height: 20),
         const _IdentitySectionHeading(
           icon: Icons.person_pin_outlined,
           overline: 'OILA PROFILI',
@@ -608,7 +608,7 @@ class _ParentFamilyPage extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         if (parent.isEmpty)
-          const _IdentityEmptyPanel(
+          _IdentityEmptyPanel(
             icon: Icons.person_search_outlined,
             title: 'Shaxsiy ma’lumotlar mavjud emas',
             message:
@@ -622,7 +622,7 @@ class _ParentFamilyPage extends StatelessWidget {
             completeness: parentProgress,
           ),
         if (child.isNotEmpty) ...[
-          const SizedBox(height: 30),
+          const SizedBox(height: 20),
           const _IdentitySectionHeading(
             icon: Icons.health_and_safety_outlined,
             overline: 'XAVFSIZLIK MARKAZI',
@@ -637,7 +637,7 @@ class _ParentFamilyPage extends StatelessWidget {
             pickups: visiblePickups,
           ),
         ],
-        const SizedBox(height: 30),
+        const SizedBox(height: 20),
         _IdentitySectionHeading(
           icon: Icons.account_tree_outlined,
           overline: 'RASMİY BOG‘LANISHLAR',
@@ -648,7 +648,7 @@ class _ParentFamilyPage extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         if (visibleGuardians.isEmpty)
-          const _IdentityEmptyPanel(
+          _IdentityEmptyPanel(
             icon: Icons.link_off_rounded,
             title: 'Rasmiy bog‘lanish topilmadi',
             message:
@@ -657,7 +657,7 @@ class _ParentFamilyPage extends StatelessWidget {
           )
         else
           _GuardianGrid(rows: visibleGuardians),
-        const SizedBox(height: 30),
+        const SizedBox(height: 20),
         _IdentitySectionHeading(
           icon: Icons.directions_walk_rounded,
           overline: 'XAVFSIZ OLIB KETISH',
@@ -668,7 +668,7 @@ class _ParentFamilyPage extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         if (visiblePickups.isEmpty)
-          const _IdentityEmptyPanel(
+          _IdentityEmptyPanel(
             icon: Icons.person_pin_circle_outlined,
             title: 'Ruxsatnomalar mavjud emas',
             message:
@@ -678,7 +678,7 @@ class _ParentFamilyPage extends StatelessWidget {
         else
           _PickupPermitGrid(rows: visiblePickups),
         if (portal.studentEvents.isNotEmpty) ...[
-          const SizedBox(height: 30),
+          const SizedBox(height: 20),
           _IdentitySectionHeading(
             icon: Icons.history_edu_rounded,
             overline: 'FARZAND TARIXI',
@@ -707,8 +707,7 @@ class _StudentPassportHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const blue = Color(0xFF2547B8);
-    const cyan = Color(0xFF11A5BD);
+    final scheme = Theme.of(context).colorScheme;
     final name = valueText(profile, const [
       'full_name',
     ], fallback: fallbackName);
@@ -722,7 +721,11 @@ class _StudentPassportHero extends StatelessWidget {
         ? 'Akkaunt nofaol'
         : 'Akkaunt holati noma’lum';
     return _IdentityHeroShell(
-      colors: const [Color(0xFF182C70), blue, cyan],
+      colors: [
+        Sf.ink,
+        Color.alphaBlend(scheme.primary.withValues(alpha: 0.5), Sf.ink),
+        Color.alphaBlend(scheme.secondary.withValues(alpha: 0.2), Sf.ink),
+      ],
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 700;
@@ -751,7 +754,8 @@ class _StudentPassportHero extends StatelessWidget {
                       style: Theme.of(context).textTheme.headlineMedium
                           ?.copyWith(
                             color: Colors.white,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w400,
+                            fontStyle: FontStyle.italic,
                             height: 1.05,
                           ),
                     ),
@@ -833,8 +837,13 @@ class _ParentFamilyHero extends StatelessWidget {
         : parent['is_active'] == false
         ? 'Kabinet nofaol'
         : 'Kabinet holati noma’lum';
+    final scheme = Theme.of(context).colorScheme;
     return _IdentityHeroShell(
-      colors: const [Color(0xFF123B42), Color(0xFF235B62), Color(0xFF3C7B78)],
+      colors: [
+        Sf.ink,
+        Color.alphaBlend(scheme.primary.withValues(alpha: 0.48), Sf.ink),
+        Color.alphaBlend(scheme.secondary.withValues(alpha: 0.16), Sf.ink),
+      ],
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 700;
@@ -843,7 +852,7 @@ class _ParentFamilyHero extends StatelessWidget {
               _HeroAvatar(
                 label: _initials(name),
                 icon: Icons.family_restroom_rounded,
-                accent: const Color(0xFFFFD7C8),
+                accent: Sf.accentSoft,
               ),
               const SizedBox(width: 18),
               Expanded(
@@ -862,7 +871,8 @@ class _ParentFamilyHero extends StatelessWidget {
                       style: Theme.of(context).textTheme.headlineMedium
                           ?.copyWith(
                             color: Colors.white,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w400,
+                            fontStyle: FontStyle.italic,
                             height: 1.05,
                           ),
                     ),
@@ -932,7 +942,7 @@ class _IdentityHeroShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(32),
+      borderRadius: BorderRadius.circular(22),
       child: Stack(
         children: [
           Positioned.fill(
@@ -973,7 +983,7 @@ class _IdentityHeroShell extends StatelessWidget {
               ),
             ),
           ),
-          Padding(padding: const EdgeInsets.all(28), child: child),
+          Padding(padding: const EdgeInsets.all(20), child: child),
         ],
       ),
     );
@@ -997,8 +1007,8 @@ class _HeroAvatar extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         Container(
-          width: 84,
-          height: 84,
+          width: 68,
+          height: 68,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.14),
@@ -1007,13 +1017,6 @@ class _HeroAvatar extends StatelessWidget {
               color: Colors.white.withValues(alpha: 0.38),
               width: 2,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.16),
-                blurRadius: 24,
-                offset: const Offset(0, 10),
-              ),
-            ],
           ),
           child: Text(
             label.isEmpty ? 'SF' : label,
@@ -1034,7 +1037,7 @@ class _HeroAvatar extends StatelessWidget {
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white, width: 2),
             ),
-            child: Icon(icon, color: const Color(0xFF26315E), size: 17),
+            child: Icon(icon, color: Sf.accentInk, size: 17),
           ),
         ),
       ],
@@ -1121,10 +1124,10 @@ class _HeroScore extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
       ),
       child: Column(
@@ -1134,9 +1137,10 @@ class _HeroScore extends StatelessWidget {
           const SizedBox(height: 14),
           Text(
             value,
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+            style: Sf.monoStyle(
+              size: 21,
+              weight: FontWeight.w700,
               color: Colors.white,
-              fontWeight: FontWeight.w900,
             ),
           ),
           Text(
@@ -1192,12 +1196,8 @@ class _IdentityMetricGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 1060
-            ? 4
-            : constraints.maxWidth >= 560
-            ? 2
-            : 1;
-        const gap = 12.0;
+        final columns = constraints.maxWidth >= 1060 ? 4 : 2;
+        const gap = 10.0;
         final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
         return Wrap(
           spacing: gap,
@@ -1228,24 +1228,13 @@ class _IdentityMetricCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: item.onTap,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(16),
         child: Ink(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(13),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [item.accent.withValues(alpha: 0.14), colors.surface],
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: item.accent.withValues(alpha: 0.2)),
-            boxShadow: [
-              BoxShadow(
-                color: item.accent.withValues(alpha: 0.07),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
-              ),
-            ],
+            color: colors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: colors.outlineVariant),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1253,13 +1242,13 @@ class _IdentityMetricCard extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    width: 39,
-                    height: 39,
+                    width: 32,
+                    height: 32,
                     decoration: BoxDecoration(
                       color: item.accent.withValues(alpha: 0.13),
-                      borderRadius: BorderRadius.circular(13),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Icon(item.icon, color: item.accent, size: 21),
+                    child: Icon(item.icon, color: item.accent, size: 17),
                   ),
                   const Spacer(),
                   if (item.onTap != null)
@@ -1270,24 +1259,23 @@ class _IdentityMetricCard extends StatelessWidget {
                     ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 11),
               Text(
                 item.value,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w900,
+                style: Sf.monoStyle(
+                  size: 19,
+                  weight: FontWeight.w700,
                   color: colors.onSurface,
                 ),
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 5),
               Text(
-                item.label,
+                item.label.toUpperCase(),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+                style: Sf.eyebrow(color: colors.onSurfaceVariant),
               ),
               const SizedBox(height: 4),
               Text(
@@ -1463,18 +1451,11 @@ class _IdentityInfoGroupCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: colors.outlineVariant),
-        boxShadow: [
-          BoxShadow(
-            color: colors.shadow.withValues(alpha: 0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1605,7 +1586,7 @@ class _StudentReadinessPanel extends StatelessWidget {
         detail: profile['current_cohort'] == null
             ? 'Joriy guruh hali biriktirilmagan.'
             : 'O‘quvchi guruhga to‘liq biriktirilgan.',
-        color: const Color(0xFF15A6B8),
+        color: Theme.of(context).colorScheme.secondary,
         icon: Icons.school_outlined,
       ),
       _PortalBarDatum(
@@ -1675,6 +1656,7 @@ class _StudentScopeBreakdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 760;
@@ -1682,7 +1664,7 @@ class _StudentScopeBreakdown extends StatelessWidget {
           title: 'Statuslar',
           subtitle: 'O‘quvchi holati bo‘yicha',
           icon: Icons.donut_large_outlined,
-          accent: const Color(0xFF3157C8),
+          accent: colors.primary,
           entries: statusEntries,
           total: total,
           transformLabel: _statusLabel,
@@ -1691,7 +1673,7 @@ class _StudentScopeBreakdown extends StatelessWidget {
           title: 'Filiallar',
           subtitle: 'Ko‘rinadigan profillar kesimi',
           icon: Icons.apartment_rounded,
-          accent: const Color(0xFF15A6B8),
+          accent: colors.secondary,
           entries: branchEntries,
           total: total,
         );
@@ -1740,10 +1722,10 @@ class _IdentityDistributionCard extends StatelessWidget {
         ? total.toDouble()
         : entries.fold<double>(0, (sum, item) => sum + item.value);
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: colors.outlineVariant),
       ),
       child: Column(
@@ -1799,7 +1781,7 @@ class _IdentityDistributionCard extends StatelessWidget {
                 color:
                     Color.lerp(
                       accent,
-                      const Color(0xFF8B5CF6),
+                      colors.secondary,
                       entries.length <= 1 ? 0 : index / (entries.length - 1),
                     ) ??
                     accent,
@@ -1883,10 +1865,10 @@ class _EmergencyContactPanel extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final contacts = _contactRows(rawContacts);
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: accent.withValues(alpha: 0.055),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: accent.withValues(alpha: 0.2)),
       ),
       child: Column(
@@ -2042,7 +2024,7 @@ class _BirthdayStrip extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: colors.outlineVariant),
       ),
       child: SingleChildScrollView(
@@ -2067,8 +2049,8 @@ class _BirthdayCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const accent = Color(0xFFE56B6F);
     final colors = Theme.of(context).colorScheme;
+    final accent = colors.secondary;
     final name = valueText(row, const ['full_name']);
     return Container(
       width: 230,
@@ -2120,10 +2102,10 @@ class _ProfileChecklist extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: colors.outlineVariant),
       ),
       child: Column(
@@ -2170,10 +2152,10 @@ class _EnrollmentReasonCloud extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: colors.outlineVariant),
       ),
       child: LayoutBuilder(
@@ -2320,7 +2302,7 @@ class _ChildSwitcher extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: colors.outlineVariant),
       ),
       child: Column(
@@ -2379,7 +2361,7 @@ class _ChildSwitchCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    const accent = Color(0xFF235B62);
+    final accent = colors.primary;
     final name = valueText(child, const ['full_name']);
     return Material(
       color: Colors.transparent,
@@ -2439,7 +2421,7 @@ class _ChildSwitchCard extends StatelessWidget {
                 ),
               ),
               if (selected)
-                const Icon(Icons.check_circle_rounded, color: accent, size: 20),
+                Icon(Icons.check_circle_rounded, color: accent, size: 20),
             ],
           ),
         ),
@@ -2457,21 +2439,13 @@ class _ChildSpotlightCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    const accent = Color(0xFF3C7B78);
+    final accent = colors.primary;
     final name = valueText(child, const ['full_name']);
     return Container(
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            accent.withValues(alpha: 0.15),
-            colors.surface,
-            colors.surface,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(28),
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: accent.withValues(alpha: 0.24)),
       ),
       child: LayoutBuilder(
@@ -2643,7 +2617,7 @@ class _ParentIdentityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const accent = Color(0xFF235B62);
+    final accent = Theme.of(context).colorScheme.primary;
     final name = valueText(parent, const ['full_name'], fallback: fallbackName);
     final fields = [
       _IdentityField(
@@ -2699,18 +2673,10 @@ class _ParentIdentityCard extends StatelessWidget {
     ];
     final colors = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            accent.withValues(alpha: 0.13),
-            colors.surface,
-            colors.surface,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(28),
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: accent.withValues(alpha: 0.22)),
       ),
       child: LayoutBuilder(
@@ -2764,7 +2730,7 @@ class _ParentIdentityCard extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.notes_rounded, color: accent, size: 19),
+                      Icon(Icons.notes_rounded, color: accent, size: 19),
                       const SizedBox(width: 9),
                       Expanded(child: Text('${parent['notes']}')),
                     ],
@@ -2917,16 +2883,12 @@ class _SafetyStatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final accent = ok ? Sf.success : const Color(0xFFC86645);
+    final accent = ok ? Sf.success : Sf.warn;
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [accent.withValues(alpha: 0.09), colors.surface],
-        ),
-        borderRadius: BorderRadius.circular(22),
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: accent.withValues(alpha: 0.2)),
       ),
       child: Column(
@@ -3088,15 +3050,15 @@ class _GuardianCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const accent = Color(0xFF235B62);
     final colors = Theme.of(context).colorScheme;
+    final accent = colors.primary;
     final primary = row['is_primary'] == true;
     final name = valueText(row, const ['parent_name']);
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(23),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: primary
               ? accent.withValues(alpha: 0.34)
@@ -3206,10 +3168,10 @@ class _PickupPermitCard extends StatelessWidget {
     final accent = active ? Sf.success : colors.error;
     final name = valueText(row, const ['full_name']);
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(23),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: accent.withValues(alpha: 0.25)),
       ),
       child: Column(
@@ -3328,10 +3290,10 @@ class _PremiumTimeline extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: colors.outlineVariant),
       ),
       child: Column(
@@ -3514,12 +3476,10 @@ class _IdentityEmptyPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [accent.withValues(alpha: 0.08), colors.surface],
-        ),
-        borderRadius: BorderRadius.circular(26),
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: accent.withValues(alpha: 0.2)),
       ),
       child: Row(

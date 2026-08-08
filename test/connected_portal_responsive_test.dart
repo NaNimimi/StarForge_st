@@ -10,6 +10,29 @@ import 'package:starforge_student/starforge_api.dart';
 import 'package:starforge_student/theme.dart';
 
 void main() {
+  testWidgets('connected login stays compact on a wide desktop', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final portal = PortalController(restoreSession: false);
+    addTearDown(portal.dispose);
+    await tester.pumpWidget(_connectedApp(portal));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Kabinetga kirish'), findsOneWidget);
+    expect(find.byKey(const ValueKey('portal-login-username')), findsOneWidget);
+    expect(find.text('Ta’lim jarayoni\nendi aniq ko‘rinadi.'), findsNothing);
+    final fieldSize = tester.getSize(
+      find.byKey(const ValueKey('portal-login-username')),
+    );
+    expect(fieldSize.width, lessThanOrEqualTo(430));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('connected student portal survives 320px and 200% text', (
     tester,
   ) async {
@@ -40,6 +63,11 @@ void main() {
 
     expect(find.text('Bugungi marshrut'), findsOneWidget);
     expect(find.text('Tezkor o‘tish'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('portal-bottom-navigation')),
+      findsOneWidget,
+    );
+    expect(find.text('Barchasi'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -75,6 +103,42 @@ void main() {
     expect(find.text('Demo Child'), findsWidgets);
     expect(find.text('Davomatni kuzatish kerak'), findsOneWidget);
     expect(find.text('Oila uchun tezkor amallar'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('connected AI page renders server request history', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 820);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final portal = PortalController(
+      api: _familyApi(role: 'student'),
+      restoreSession: false,
+    );
+    addTearDown(portal.dispose);
+    expect(
+      await tester.runAsync(
+        () => portal.login(
+          baseUrl: 'https://demo.example.uz',
+          username: 'student',
+          password: 'secret',
+        ),
+      ),
+      isTrue,
+    );
+
+    await tester.pumpWidget(_connectedApp(portal));
+    await tester.pump();
+    await tester.tap(find.text('AI yordamchi'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(find.text('AI o‘qish yordamchisi'), findsOneWidget);
+    expect(find.text('Essay feedback'), findsOneWidget);
+    expect(find.text('SERVER AI'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
@@ -125,6 +189,7 @@ StarForgeApi _familyApi({required String role}) => StarForgeApi(
                 'academics:read',
                 'schedule:read',
                 'messaging:read',
+                'ai:read',
               ],
       });
     }
@@ -171,6 +236,23 @@ StarForgeApi _familyApi({required String role}) => StarForgeApi(
     }
     if (path.endsWith('/notifications/unread-count/')) {
       return _ok({'count': 0});
+    }
+    if (path.endsWith('/ai/requests/')) {
+      return _ok([
+        {
+          'id': 1,
+          'title': 'Essay feedback',
+          'status': 'completed',
+          'model': 'education-model',
+          'created_at': '2026-08-08T10:00:00Z',
+        },
+      ]);
+    }
+    if (path.endsWith('/ai/budget/')) {
+      return _ok({'remaining': 42, 'spent': 8});
+    }
+    if (path.endsWith('/ai/usage-report/')) {
+      return _ok({'total_requests': 1, 'total_tokens': 1200});
     }
     return http.Response('not found', 404);
   }),

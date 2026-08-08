@@ -41,9 +41,9 @@ class Sf {
   static const mono = 'JetBrainsMono';
 
   static const radiusSmall = 8.0;
-  static const radiusMedium = 12.0;
-  static const radiusLarge = 18.0;
-  static const radiusExtraLarge = 24.0;
+  static const radiusMedium = 14.0;
+  static const radiusLarge = 16.0;
+  static const radiusExtraLarge = 22.0;
 
   static const shadowMd = [
     BoxShadow(color: Color(0x12101828), blurRadius: 24, offset: Offset(0, 10)),
@@ -125,39 +125,41 @@ class Sf {
           .apply(bodyColor: scheme.onSurface, displayColor: scheme.onSurface)
           .copyWith(
             headlineLarge: t(
-              size: 34,
-              weight: FontWeight.w700,
+              size: 31,
+              weight: FontWeight.w400,
               color: scheme.onSurface,
-              height: 1.08,
+              height: 1.05,
               family: display,
+              style: FontStyle.italic,
             ),
             headlineMedium: t(
-              size: 27,
-              weight: FontWeight.w700,
+              size: 24,
+              weight: FontWeight.w400,
               color: scheme.onSurface,
-              height: 1.12,
+              height: 1.05,
               family: display,
+              style: FontStyle.italic,
             ),
             titleLarge: t(
-              size: 20,
+              size: 18,
               weight: FontWeight.w800,
               color: scheme.onSurface,
               height: 1.2,
             ),
             titleMedium: t(
-              size: 16,
+              size: 15,
               weight: FontWeight.w700,
               color: scheme.onSurface,
               height: 1.25,
             ),
             bodyLarge: t(
-              size: 15,
+              size: 14,
               weight: FontWeight.w500,
               color: scheme.onSurface,
               height: 1.45,
             ),
             bodyMedium: t(
-              size: 13.5,
+              size: 13,
               weight: FontWeight.w500,
               color: scheme.onSurface,
               height: 1.45,
@@ -295,9 +297,7 @@ class Sf {
           minimumSize: const Size(48, 50),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
           textStyle: t(size: 13, weight: FontWeight.w800),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(radiusMedium),
-          ),
+          shape: const StadiumBorder(),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -306,18 +306,14 @@ class Sf {
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
           textStyle: t(size: 13, weight: FontWeight.w800),
           side: BorderSide(color: scheme.outline),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(radiusMedium),
-          ),
+          shape: const StadiumBorder(),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           minimumSize: const Size(44, 44),
           textStyle: t(size: 13, weight: FontWeight.w800),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(radiusMedium),
-          ),
+          shape: const StadiumBorder(),
         ),
       ),
       iconButtonTheme: IconButtonThemeData(

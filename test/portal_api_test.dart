@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -137,6 +137,50 @@ void main() {
     );
     expect(requestedPaths, ['/api/v1/auth/login/']);
     expect(portal.authenticationError, 'Invalid username or password.');
+  });
+
+  test('native login binds the backend session to the push device', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    Map<String, dynamic>? loginBody;
+    final api = StarForgeApi(
+      baseUrl: 'https://demo.example.uz',
+      client: MockClient((request) async {
+        final path = request.url.path;
+        if (path.endsWith('/auth/login/')) {
+          loginBody = jsonDecode(request.body) as Map<String, dynamic>;
+          return _ok({'access': 'native-session', 'role': 'student'});
+        }
+        if (path.endsWith('/users/me/')) {
+          return _ok({
+            'id': 7,
+            'principal_kind': 'student',
+            'permission_codes': const <String>[],
+          });
+        }
+        if (path.endsWith('/students/me/dashboard/')) return _ok({});
+        if (path.endsWith('/students/me/report/')) return _ok({});
+        if (path.endsWith('/notifications/unread-count/')) {
+          return _ok({'count': 0});
+        }
+        return http.Response('not found', 404);
+      }),
+    );
+    final portal = PortalController(api: api, restoreSession: false);
+    addTearDown(portal.dispose);
+
+    expect(
+      await portal.login(
+        baseUrl: 'https://demo.example.uz',
+        username: 'student',
+        password: 'secret',
+      ),
+      isTrue,
+    );
+    expect(loginBody?['platform'], 'android');
+    expect('${loginBody?['device_id']}', startsWith('family-'));
+    expect(loginBody?['username'], 'student');
+    expect(loginBody?['password'], 'secret');
   });
 
   test('student role login hydrates profile and server dashboard', () async {
@@ -612,6 +656,107 @@ void main() {
     expect(multipartBody, contains('demo/messaging/voice.wav'));
     expect(multipartBody, contains('signed-policy'));
     expect(multipartBody, contains('filename="voice.wav"'));
+  });
+
+  test('assignment attachment follows the presigned POST grant', () async {
+    final methods = <String>[];
+    String? multipartBody;
+    final api = StarForgeApi(
+      baseUrl: 'https://demo.example.uz',
+      client: MockClient((request) async {
+        methods.add('${request.method} ${request.url}');
+        if (request.url.path.endsWith('/assignments/upload-url/')) {
+          expect(
+            jsonDecode(request.body),
+            containsPair('content_type', 'application/pdf'),
+          );
+          return _ok({
+            'url': 'https://storage.example.uz/upload',
+            'key': 'demo/assignments/answer.pdf',
+            'method': 'POST',
+            'fields': {
+              'key': 'demo/assignments/answer.pdf',
+              'Content-Type': 'application/pdf',
+              'policy': 'signed-policy',
+            },
+          });
+        }
+        if (request.url.host == 'storage.example.uz') {
+          multipartBody = request.body;
+          expect(
+            request.headers['content-type'],
+            startsWith('multipart/form-data; boundary='),
+          );
+          return http.Response('', 204);
+        }
+        return http.Response('not found', 404);
+      }),
+    );
+    final portal = PortalController(api: api, restoreSession: false);
+    addTearDown(portal.dispose);
+
+    final key = await portal.uploadAssignmentFile(
+      filename: 'answer.pdf',
+      contentType: 'application/pdf',
+      bytes: Uint8List.fromList(const [1, 2, 3, 4]),
+    );
+
+    expect(key, 'demo/assignments/answer.pdf');
+    expect(methods.first, contains('POST https://demo.example.uz'));
+    expect(methods.last, 'POST https://storage.example.uz/upload');
+    expect(multipartBody, contains('signed-policy'));
+    expect(multipartBody, contains('filename="answer.pdf"'));
+  });
+
+  test('latest assignment attempt drives the resubmission limit', () {
+    final rows = <Map<String, Object?>>[
+      {
+        'id': 30,
+        'assignment': 8,
+        'attempt_number': 3,
+        'submitted_at': '2026-08-08T10:00:00Z',
+        'status': 'submitted',
+      },
+      {
+        'id': 10,
+        'assignment': 8,
+        'attempt_number': 1,
+        'submitted_at': '2026-08-06T10:00:00Z',
+        'status': 'returned',
+      },
+      {
+        'id': 20,
+        'assignment': 8,
+        'attempt_number': 2,
+        'submitted_at': '2026-08-07T10:00:00Z',
+        'status': 'returned',
+      },
+    ];
+
+    final latest = latestAssignmentSubmissions(rows)[8];
+
+    expect(latest?['id'], 30);
+    expect(
+      assignmentAcceptsAnotherSubmission({
+        'status': 'published',
+        'max_resubmits': 3,
+      }, latest),
+      isTrue,
+    );
+    expect(
+      assignmentAcceptsAnotherSubmission({
+        'status': 'published',
+        'max_resubmits': 2,
+      }, latest),
+      isFalse,
+    );
+    expect(
+      assignmentAcceptsAnotherSubmission({
+        'status': 'closed',
+        'max_resubmits': 10,
+      }, latest),
+      isFalse,
+    );
   });
 
   test('backend errors keep stable message and code', () async {

@@ -16,6 +16,7 @@ enum PortalSection {
   content,
   attendance,
   messages,
+  ai,
   notifications,
   forms,
   achievements,
@@ -103,6 +104,9 @@ final class PortalController extends ChangeNotifier {
   final Map<int, List<Map<String, Object?>>> messages = {};
   final Set<int> loadingMessageThreads = {};
   final Map<int, String> messageErrors = {};
+  List<Map<String, Object?>> aiRequests = const [];
+  Map<String, Object?> aiBudget = const {};
+  Map<String, Object?> aiUsage = const {};
   List<Map<String, Object?>> forms = const [];
   List<Map<String, Object?>> achievementGrants = const [];
   List<Map<String, Object?>> rules = const [];
@@ -192,6 +196,14 @@ final class PortalController extends ChangeNotifier {
         'username': username.trim(),
         'password': password,
       };
+      if (!kIsWeb) {
+        final platform = pushPlatformName(defaultTargetPlatform);
+        if (platform != 'unsupported') {
+          body
+            ..['device_id'] = deviceId
+            ..['platform'] = platform;
+        }
+      }
       ApiResult result;
       try {
         // This is the canonical login contract. The deployed tenant currently
@@ -291,6 +303,18 @@ final class PortalController extends ChangeNotifier {
     mustChangePassword = profile['must_change_password'] == true;
   }
 
+  Future<ApiResult> _optionalGet(
+    String path, {
+    Map<String, Object?> query = const {},
+  }) async {
+    try {
+      return await _api.get(path, query: query);
+    } on ApiException catch (error) {
+      if (error.isUnauthorized) rethrow;
+      return const ApiResult(data: null);
+    }
+  }
+
   Future<void> loadSection(PortalSection section, {bool force = false}) async {
     if (!isAuthenticated || _loading.contains(section)) return;
     if (!force && _loaded.contains(section)) return;
@@ -307,6 +331,7 @@ final class PortalController extends ChangeNotifier {
         PortalSection.content => _loadContent(),
         PortalSection.attendance => _loadAttendance(),
         PortalSection.messages => _loadMessaging(),
+        PortalSection.ai => _loadAi(),
         PortalSection.notifications => _loadNotifications(),
         PortalSection.forms => _loadForms(),
         PortalSection.achievements => _loadAchievements(),
@@ -387,17 +412,24 @@ final class PortalController extends ChangeNotifier {
         '/api/v1/students/',
         query: const {'page_size': 25},
       )).rows;
+      final selectedExists = studentRows.any(
+        (item) => _integer(item['id']) == selectedStudentId,
+      );
       final studentId =
-          selectedStudentId ??
+          (selectedExists ? selectedStudentId : null) ??
           _integer(studentRows.firstOrNull?['id']) ??
           _integer(profile['id']);
       selectedStudentId = studentId;
       final values = await Future.wait([
         if (studentId != null) _api.get('/api/v1/students/$studentId/'),
-        if (studentId != null) _api.get('/api/v1/students/$studentId/events/'),
-        _api.get('/api/v1/students/stats/'),
-        _api.get('/api/v1/students/birthdays/', query: const {'page_size': 25}),
-        _api.get(
+        if (studentId != null)
+          _optionalGet('/api/v1/students/$studentId/events/'),
+        _optionalGet('/api/v1/students/stats/'),
+        _optionalGet(
+          '/api/v1/students/birthdays/',
+          query: const {'page_size': 25},
+        ),
+        _optionalGet(
           '/api/v1/students/enrollment-reasons/',
           query: const {'page_size': 100},
         ),
@@ -419,11 +451,24 @@ final class PortalController extends ChangeNotifier {
 
     final values = await Future.wait([
       _api.get('/api/v1/parents/', query: const {'page_size': 25}),
-      _api.get('/api/v1/parents/guardians/', query: const {'page_size': 100}),
-      _api.get('/api/v1/parents/pickups/', query: const {'page_size': 100}),
+      _optionalGet(
+        '/api/v1/parents/guardians/',
+        query: const {'page_size': 100},
+      ),
+      _optionalGet('/api/v1/parents/pickups/', query: const {'page_size': 100}),
       if (children.isEmpty) _api.get('/api/v1/parents/me/children/'),
     ]);
-    parentProfile = values[0].rows.firstOrNull ?? const {};
+    final parentRows = values[0].rows;
+    final profileUserId = _integer(profile['id']);
+    parentProfile =
+        parentRows
+            .where(
+              (item) =>
+                  _integer(item['user'] ?? item['user_id']) == profileUserId,
+            )
+            .firstOrNull ??
+        parentRows.firstOrNull ??
+        const {};
     guardians = values[1].rows;
     pickups = values[2].rows;
     if (children.isEmpty && values.length > 3) children = values[3].rows;
@@ -433,7 +478,7 @@ final class PortalController extends ChangeNotifier {
     if (studentId != null) {
       final childValues = await Future.wait([
         _api.get('/api/v1/students/$studentId/'),
-        _api.get('/api/v1/students/$studentId/events/'),
+        _optionalGet('/api/v1/students/$studentId/events/'),
       ]);
       studentProfile = childValues[0].object;
       studentEvents = childValues[1].rows;
@@ -461,6 +506,7 @@ final class PortalController extends ChangeNotifier {
       outstanding = next.$2;
       _loaded.removeAll({
         PortalSection.identity,
+        PortalSection.assignments,
         PortalSection.schedule,
         PortalSection.finance,
         PortalSection.attendance,
@@ -560,14 +606,17 @@ final class PortalController extends ChangeNotifier {
           'cohort': ?selectedCohortId,
         },
       ),
-      _api.get('/api/v1/schedule/terms/', query: const {'page_size': 100}),
-      _api.get('/api/v1/schedule/timeslots/', query: const {'page_size': 100}),
-      _api.get(
+      _optionalGet('/api/v1/schedule/terms/', query: const {'page_size': 100}),
+      _optionalGet(
+        '/api/v1/schedule/timeslots/',
+        query: const {'page_size': 100},
+      ),
+      _optionalGet(
         '/api/v1/schedule/lesson-types/',
         query: const {'page_size': 100},
       ),
-      _api.get('/api/v1/schedule/rules/', query: const {'page_size': 100}),
-      _api.get('/api/v1/schedule/ical-url/'),
+      _optionalGet('/api/v1/schedule/rules/', query: const {'page_size': 100}),
+      _optionalGet('/api/v1/schedule/ical-url/'),
     ]);
     lessons = values[0].rows;
     terms = values[1].rows;
@@ -589,7 +638,10 @@ final class PortalController extends ChangeNotifier {
         },
       ),
       if (terms.isEmpty)
-        _api.get('/api/v1/schedule/terms/', query: const {'page_size': 100}),
+        _optionalGet(
+          '/api/v1/schedule/terms/',
+          query: const {'page_size': 100},
+        ),
     ]);
     attendance = values[0].rows;
     if (terms.isEmpty && values.length > 1) terms = values[1].rows;
@@ -611,12 +663,15 @@ final class PortalController extends ChangeNotifier {
     final studentId = selectedStudentId;
     final cohortId = _selectedCohortId;
     final values = await Future.wait([
-      _api.get('/api/v1/academics/subjects/', query: const {'page_size': 100}),
-      _api.get(
+      _optionalGet(
+        '/api/v1/academics/subjects/',
+        query: const {'page_size': 100},
+      ),
+      _optionalGet(
         '/api/v1/academics/exam-types/',
         query: const {'page_size': 100},
       ),
-      _api.get(
+      _optionalGet(
         '/api/v1/academics/exams/',
         query: {'page_size': 100, if (isParent) 'cohort': ?cohortId},
       ),
@@ -624,12 +679,15 @@ final class PortalController extends ChangeNotifier {
         '/api/v1/academics/grades/',
         query: {'page_size': 100, if (isParent) 'student': ?studentId},
       ),
-      _api.get(
+      _optionalGet(
         '/api/v1/academics/transcripts/',
         query: const {'page_size': 100},
       ),
       if (terms.isEmpty)
-        _api.get('/api/v1/schedule/terms/', query: const {'page_size': 100}),
+        _optionalGet(
+          '/api/v1/schedule/terms/',
+          query: const {'page_size': 100},
+        ),
     ]);
     subjects = values[0].rows;
     examTypes = values[1].rows;
@@ -641,13 +699,19 @@ final class PortalController extends ChangeNotifier {
 
   Future<void> _loadContent() async {
     final values = await Future.wait([
-      _api.get('/api/v1/content/libraries/', query: const {'page_size': 100}),
+      _optionalGet(
+        '/api/v1/content/libraries/',
+        query: const {'page_size': 100},
+      ),
       _api.get('/api/v1/content/courses/', query: const {'page_size': 100}),
-      _api.get('/api/v1/content/modules/', query: const {'page_size': 100}),
-      _api.get('/api/v1/content/lessons/', query: const {'page_size': 100}),
-      _api.get('/api/v1/content/folders/', query: const {'page_size': 100}),
-      _api.get('/api/v1/content/files/', query: const {'page_size': 100}),
-      _api.get('/api/v1/content/materials/', query: const {'page_size': 100}),
+      _optionalGet('/api/v1/content/modules/', query: const {'page_size': 100}),
+      _optionalGet('/api/v1/content/lessons/', query: const {'page_size': 100}),
+      _optionalGet('/api/v1/content/folders/', query: const {'page_size': 100}),
+      _optionalGet('/api/v1/content/files/', query: const {'page_size': 100}),
+      _optionalGet(
+        '/api/v1/content/materials/',
+        query: const {'page_size': 100},
+      ),
     ]);
     libraries = values[0].rows;
     courses = values[1].rows;
@@ -678,12 +742,32 @@ final class PortalController extends ChangeNotifier {
 
   Future<void> _loadMessaging() async {
     final values = await Future.wait([
-      _api.get('/api/v1/messaging/contacts/', query: const {'page_size': 100}),
+      _optionalGet(
+        '/api/v1/messaging/contacts/',
+        query: const {'page_size': 100},
+      ),
       _api.get('/api/v1/messaging/threads/', query: const {'page_size': 100}),
     ]);
     contacts = values[0].rows;
     messagingSelfUserId = _integer(values[0].pagination['self_user_id']);
     threads = values[1].rows;
+  }
+
+  Future<void> _loadAi() async {
+    aiRequests = (await _api.get(
+      '/api/v1/ai/requests/',
+      query: const {'page_size': 50, 'ordering': '-created_at'},
+    )).rows;
+    try {
+      aiBudget = (await _api.get('/api/v1/ai/budget/')).object;
+    } on ApiException {
+      aiBudget = const {};
+    }
+    try {
+      aiUsage = (await _api.get('/api/v1/ai/usage-report/')).object;
+    } on ApiException {
+      aiUsage = const {};
+    }
   }
 
   Future<void> loadMessages(int threadId, {bool force = false}) async {
@@ -821,13 +905,35 @@ final class PortalController extends ChangeNotifier {
     )).object;
     final url = '${grant['url'] ?? ''}';
     final key = '${grant['key'] ?? ''}';
-    if (url.isEmpty || key.isEmpty) {
+    final rawFields = grant['fields'];
+    final fields = rawFields is Map
+        ? <String, String>{
+            for (final entry in rawFields.entries)
+              '${entry.key}': '${entry.value}',
+          }
+        : const <String, String>{};
+    final method = '${grant['method'] ?? (fields.isEmpty ? 'PUT' : 'POST')}'
+        .trim()
+        .toUpperCase();
+    if (url.isEmpty ||
+        key.isEmpty ||
+        (method == 'POST' && fields.isEmpty) ||
+        (method != 'POST' && method != 'PUT')) {
       throw const ApiException(
         message: 'Yuklash ruxsati noto‘g‘ri qaytdi.',
         code: 'invalid_upload_grant',
       );
     }
-    await _api.uploadBytes(url, bytes, contentType: contentType);
+    if (method == 'POST') {
+      await _api.uploadMultipartBytes(
+        url,
+        bytes,
+        filename: filename,
+        fields: fields,
+      );
+    } else {
+      await _api.uploadBytes(url, bytes, contentType: contentType);
+    }
     return key;
   }
 
@@ -1149,6 +1255,62 @@ final class PortalController extends ChangeNotifier {
     _api.close();
     super.dispose();
   }
+}
+
+Map<int, Map<String, Object?>> latestAssignmentSubmissions(
+  Iterable<Map<String, Object?>> rows,
+) {
+  final latest = <int, Map<String, Object?>>{};
+  for (final row in rows) {
+    final assignmentId = _integer(row['assignment']);
+    if (assignmentId == null) continue;
+    final current = latest[assignmentId];
+    if (current == null || _isLaterSubmission(row, current)) {
+      latest[assignmentId] = row;
+    }
+  }
+  return latest;
+}
+
+bool assignmentAcceptsAnotherSubmission(
+  Map<String, Object?> assignment,
+  Map<String, Object?>? latestSubmission,
+) {
+  if ('${assignment['status']}'.trim().toLowerCase() != 'published') {
+    return false;
+  }
+  if (latestSubmission == null) return true;
+
+  final maxResubmits = _integer(assignment['max_resubmits']);
+  if (maxResubmits == null) {
+    // The API falls back to the center-wide limit when this field is null. Keep
+    // the server authoritative instead of incorrectly locking the student out.
+    return true;
+  }
+  final attempt = _integer(latestSubmission['attempt_number']) ?? 1;
+  return attempt < maxResubmits + 1;
+}
+
+bool _isLaterSubmission(
+  Map<String, Object?> candidate,
+  Map<String, Object?> current,
+) {
+  final candidateAttempt = _integer(candidate['attempt_number']) ?? 0;
+  final currentAttempt = _integer(current['attempt_number']) ?? 0;
+  if (candidateAttempt != currentAttempt) {
+    return candidateAttempt > currentAttempt;
+  }
+
+  final candidateTime = DateTime.tryParse('${candidate['submitted_at'] ?? ''}');
+  final currentTime = DateTime.tryParse('${current['submitted_at'] ?? ''}');
+  if (candidateTime != null && currentTime != null) {
+    final comparison = candidateTime.compareTo(currentTime);
+    if (comparison != 0) return comparison > 0;
+  } else if (candidateTime != null) {
+    return true;
+  }
+
+  return (_integer(candidate['id']) ?? 0) > (_integer(current['id']) ?? 0);
 }
 
 String valueText(

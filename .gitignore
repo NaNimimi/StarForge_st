@@ -4,6 +4,13 @@
 *.pyc
 *.swp
 .DS_Store
+.env
+.env.*
+!.env.example
+*service-account*.json
+*.p8
+*.p12
+*.mobileprovision
 .atom/
 .build/
 .buildlog/

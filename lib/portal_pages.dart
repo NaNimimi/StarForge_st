@@ -61,7 +61,7 @@ class _RebuiltHomePortalPage extends StatelessWidget {
                   ? 'Hammasi bajarilgan'
                   : 'Muddatni kuzating',
               icon: Icons.task_alt_rounded,
-              color: const Color(0xFF5968F2),
+              color: Sf.primary,
             ),
             _CockpitMetricData(
               label: 'Davomat',
@@ -80,7 +80,7 @@ class _RebuiltHomePortalPage extends StatelessWidget {
                   ? '${grades.length} ta so‘nggi baho'
                   : 'Sinfda ${rank['rank']} / ${rank['of']}',
               icon: Icons.insights_rounded,
-              color: const Color(0xFF8B5CF6),
+              color: Sf.accent,
             ),
             _CockpitMetricData(
               label: 'Oilaviy balans',
@@ -105,7 +105,7 @@ class _RebuiltHomePortalPage extends StatelessWidget {
                     ? 'Yangi vazifa yo‘q'
                     : '$openCount ta ochiq vazifa',
                 icon: Icons.assignment_outlined,
-                color: const Color(0xFF5968F2),
+                color: Sf.primary,
                 section: PortalSection.assignments,
               ),
             if (portal.can('schedule:read'))
@@ -115,7 +115,7 @@ class _RebuiltHomePortalPage extends StatelessWidget {
                     ? 'Bugun dars yo‘q'
                     : '${lessons.length} ta yaqin dars',
                 icon: Icons.calendar_month_outlined,
-                color: const Color(0xFF2C8EA0),
+                color: Sf.success,
                 section: PortalSection.schedule,
               ),
             if (portal.can('academics:read'))
@@ -125,7 +125,7 @@ class _RebuiltHomePortalPage extends StatelessWidget {
                     ? 'Natija kiritilmagan'
                     : '${grades.length} ta so‘nggi baho',
                 icon: Icons.query_stats_rounded,
-                color: const Color(0xFF8B5CF6),
+                color: Sf.accent,
                 section: PortalSection.academics,
               ),
             if (portal.can('messaging:read'))
@@ -133,7 +133,7 @@ class _RebuiltHomePortalPage extends StatelessWidget {
                 label: 'Ustoz bilan chat',
                 detail: 'Savol yoki fayl yuboring',
                 icon: Icons.forum_outlined,
-                color: Color(0xFF1F9D70),
+                color: Sf.success,
                 section: PortalSection.messages,
               ),
           ],
@@ -188,7 +188,7 @@ class _RebuiltHomePortalPage extends StatelessWidget {
       subtitle:
           'Farzandingizning davomat, o‘zlashtirish va moliyaviy holati bir joyda.',
       section: PortalSection.home,
-      trailing: MediaQuery.sizeOf(context).width >= 1024
+      trailing: MediaQuery.sizeOf(context).width >= 840
           ? null
           : portal.children.length > 1
           ? _ChildContextSelector(portal: portal)
@@ -249,7 +249,7 @@ class _RebuiltHomePortalPage extends StatelessWidget {
                     '${attendance['present'] ?? 0} / ${attendance['of'] ?? 0}',
                 note: 'Davomat jurnalida',
                 icon: Icons.how_to_reg_outlined,
-                color: const Color(0xFF235B62),
+                color: Sf.primary,
               ),
               _CockpitMetricData(
                 label: 'Sinfdagi o‘rni',
@@ -258,7 +258,7 @@ class _RebuiltHomePortalPage extends StatelessWidget {
                     ? 'Markaz yashirgan'
                     : 'O‘rtacha ${rank['average_pct'] ?? '—'}%',
                 icon: Icons.leaderboard_outlined,
-                color: const Color(0xFFC86645),
+                color: Sf.accent,
               ),
               _CockpitMetricData(
                 label: 'Ochiq to‘lov',
@@ -277,9 +277,17 @@ class _RebuiltHomePortalPage extends StatelessWidget {
                 label: 'Farzand profili',
                 detail: 'Aloqalar va hujjatlar',
                 icon: Icons.supervisor_account_outlined,
-                color: Color(0xFF235B62),
+                color: Sf.primary,
                 section: PortalSection.identity,
               ),
+              if (portal.can('assignments:read'))
+                const _HomeActionData(
+                  label: 'Farzand vazifalari',
+                  detail: 'Muddat va topshirish holati',
+                  icon: Icons.assignment_outlined,
+                  color: Sf.warn,
+                  section: PortalSection.assignments,
+                ),
               if (portal.can('attendance:read'))
                 _HomeActionData(
                   label: 'Davomat tafsiloti',
@@ -293,7 +301,7 @@ class _RebuiltHomePortalPage extends StatelessWidget {
                   label: 'O‘zlashtirish',
                   detail: 'Baholar va dinamika',
                   icon: Icons.insights_outlined,
-                  color: Color(0xFFC86645),
+                  color: Sf.accent,
                   section: PortalSection.academics,
                 ),
               if (portal.can('finance:read_own'))
@@ -313,7 +321,7 @@ class _RebuiltHomePortalPage extends StatelessWidget {
                   label: 'Maktab bilan chat',
                   detail: 'Savol yoki fayl yuboring',
                   icon: Icons.forum_outlined,
-                  color: Color(0xFF8B5CF6),
+                  color: Sf.success,
                   section: PortalSection.messages,
                 ),
             ],
@@ -454,23 +462,29 @@ class _CockpitHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = parent ? const Color(0xFFC86645) : const Color(0xFF9EA7FF);
-    final background = parent
-        ? const Color(0xFF17494F)
-        : const Color(0xFF171D31);
+    final scheme = Theme.of(context).colorScheme;
+    final accent = scheme.primary;
     final focusAccent = parent && !attentionKnown
-        ? const Color(0xFFFFC857)
+        ? Sf.warn
         : parent && !attentionCritical
-        ? const Color(0xFF70D8B3)
+        ? Sf.successSoft
         : accent;
     final lessonTitle = valueText(primaryItem ?? const {}, const [
       'title',
     ], fallback: 'Bugun boshqa dars yo‘q');
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Sf.ink,
+            Color.alphaBlend(accent.withValues(alpha: 0.44), Sf.ink),
+            Color.alphaBlend(scheme.secondary.withValues(alpha: 0.16), Sf.ink),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(22),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -492,18 +506,17 @@ class _CockpitHero extends StatelessWidget {
               Text(
                 parent ? name : 'Salom, $name',
                 style: Sf.serif(
-                  size: compact ? 34 : 42,
-                  color: Colors.white,
-                  height: 1.06,
-                  italic: false,
+                  size: compact ? 28 : 31,
+                  color: Sf.surface,
+                  height: 1.03,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
                 contextTitle,
                 style: const TextStyle(
-                  color: Color(0xFFB8C0D6),
-                  fontSize: 13,
+                  color: Color(0xFFC9C0AF),
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -513,7 +526,7 @@ class _CockpitHero extends StatelessWidget {
             padding: const EdgeInsets.all(17),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
             ),
             child: Column(
@@ -560,8 +573,8 @@ class _CockpitHero extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
+                    color: Sf.surface,
+                    fontSize: 15,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -575,8 +588,8 @@ class _CockpitHero extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Color(0xFFB8C0D6),
-                    fontSize: 12,
+                    color: Color(0xFFC9C0AF),
+                    fontSize: 11.5,
                     height: 1.4,
                   ),
                 ),
@@ -645,12 +658,8 @@ class _CockpitMetricStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final count = constraints.maxWidth >= 1000
-          ? 4
-          : constraints.maxWidth >= 560
-          ? 2
-          : 1;
-      const gap = 12.0;
+      final count = constraints.maxWidth >= 1000 ? 4 : 2;
+      const gap = 10.0;
       final width = (constraints.maxWidth - gap * (count - 1)) / count;
       return Wrap(
         spacing: gap,
@@ -674,40 +683,48 @@ class _CockpitMetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _SectionCard(
-    padding: const EdgeInsets.all(15),
-    child: Row(
+    padding: const EdgeInsets.all(13),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: item.color.withValues(alpha: 0.11),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(item.icon, color: item.color, size: 21),
+        Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: item.color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(item.icon, color: item.color, size: 17),
+            ),
+            const Spacer(),
+            Icon(Icons.north_east_rounded, size: 15, color: item.color),
+          ],
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                item.value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-              ),
-              Text(item.label, style: Theme.of(context).textTheme.labelMedium),
-              Text(
-                item.note,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
+        const SizedBox(height: 11),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            item.value,
+            style: Sf.monoStyle(size: 20, weight: FontWeight.w700),
           ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          item.label.toUpperCase(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Sf.eyebrow(),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          item.note,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall,
         ),
       ],
     ),
@@ -1551,7 +1568,7 @@ class _LearningInsightPanel extends StatelessWidget {
           return Column(children: [ring, const SizedBox(height: 12), bars]);
         }
         return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(width: 218, child: ring),
             const SizedBox(width: 12),
@@ -1607,20 +1624,19 @@ class _AssignmentsPortalPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final portal = PortalScope.of(context);
-    final submissionByAssignment = <int, Map<String, Object?>>{};
-    for (final submission in portal.submissions) {
-      final id = valueInt(submission['assignment']);
-      if (id != null) submissionByAssignment[id] = submission;
-    }
+    final submissionByAssignment = latestAssignmentSubmissions(
+      portal.submissions,
+    );
     final visible = portal.assignments
         .where(
           (item) => const {'published', 'closed'}.contains('${item['status']}'),
         )
         .toList();
     return _PortalPage(
-      title: 'Vazifalar',
-      subtitle:
-          'Topshiriq tafsilotlari, muddat va serverdagi topshirish holati.',
+      title: portal.isParent ? 'Farzand vazifalari' : 'Vazifalar',
+      subtitle: portal.isParent
+          ? 'Topshiriqlar, muddatlar va farzandingizning topshirish holati.'
+          : 'Topshiriq tafsilotlari, muddat va serverdagi topshirish holati.',
       section: PortalSection.assignments,
       children: [
         _ResponsiveGrid(
@@ -1632,18 +1648,18 @@ class _AssignmentsPortalPage extends StatelessWidget {
             ),
             _MetricCard(
               label: 'Topshirilgan',
-              value: '${portal.submissions.length}',
+              value: '${submissionByAssignment.length}',
               icon: Icons.task_alt_rounded,
             ),
             _MetricCard(
               label: 'Baholangan',
               value:
-                  '${portal.submissions.where((item) => valueMap(item['grade'])['graded'] == true).length}',
+                  '${submissionByAssignment.values.where((item) => valueMap(item['grade'])['graded'] == true).length}',
               icon: Icons.school_outlined,
             ),
           ],
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 12),
         if (visible.isEmpty)
           const _EmptyState(
             icon: Icons.assignment_turned_in_outlined,
@@ -1655,6 +1671,9 @@ class _AssignmentsPortalPage extends StatelessWidget {
             final id = valueInt(assignment['id']);
             final submission = id == null ? null : submissionByAssignment[id];
             final grade = valueMap(submission?['grade']);
+            final canSubmit =
+                portal.can('assignments:submit') &&
+                assignmentAcceptsAnotherSubmission(assignment, submission);
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: _SectionCard(
@@ -1719,35 +1738,44 @@ class _AssignmentsPortalPage extends StatelessWidget {
                         error: false,
                       ),
                     ],
-                    const SizedBox(height: 14),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: FilledButton.tonalIcon(
-                        onPressed:
-                            id == null || assignment['status'] == 'closed'
-                            ? null
-                            : () => showModalBottomSheet<void>(
-                                context: context,
-                                isScrollControlled: true,
-                                useSafeArea: true,
-                                builder: (_) => PortalScope(
-                                  controller: portal,
-                                  child: _AssignmentSubmitSheet(
-                                    assignment: assignment,
-                                    submission: submission,
+                    if (portal.isStudent) ...[
+                      const SizedBox(height: 14),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: FilledButton.tonalIcon(
+                          onPressed:
+                              id == null || (submission == null && !canSubmit)
+                              ? null
+                              : () => showModalBottomSheet<void>(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  useSafeArea: true,
+                                  builder: (_) => PortalScope(
+                                    controller: portal,
+                                    child: _AssignmentSubmitSheet(
+                                      assignment: assignment,
+                                      submission: submission,
+                                      allowSubmit: canSubmit,
+                                    ),
                                   ),
                                 ),
-                              ),
-                        icon: Icon(
-                          submission == null
-                              ? Icons.upload_file_rounded
-                              : Icons.visibility_outlined,
-                        ),
-                        label: Text(
-                          submission == null ? 'Topshirish' : 'Ishni ko‘rish',
+                          icon: Icon(
+                            submission == null
+                                ? Icons.upload_file_rounded
+                                : canSubmit
+                                ? Icons.replay_rounded
+                                : Icons.visibility_outlined,
+                          ),
+                          label: Text(
+                            submission == null
+                                ? 'Topshirish'
+                                : canSubmit
+                                ? 'Qayta topshirish'
+                                : 'Ishni ko‘rish',
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -1759,10 +1787,15 @@ class _AssignmentsPortalPage extends StatelessWidget {
 }
 
 class _AssignmentSubmitSheet extends StatefulWidget {
-  const _AssignmentSubmitSheet({required this.assignment, this.submission});
+  const _AssignmentSubmitSheet({
+    required this.assignment,
+    required this.allowSubmit,
+    this.submission,
+  });
 
   final Map<String, Object?> assignment;
   final Map<String, Object?>? submission;
+  final bool allowSubmit;
 
   @override
   State<_AssignmentSubmitSheet> createState() => _AssignmentSubmitSheetState();
@@ -1849,9 +1882,11 @@ class _AssignmentSubmitSheetState extends State<_AssignmentSubmitSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final readOnly = widget.submission != null;
+    final readOnly = !widget.allowSubmit;
     final grade = valueMap(widget.submission?['grade']);
     final aiFeedback = valueText(grade, const ['ai_feedback'], fallback: '');
+    final attempt = valueInt(widget.submission?['attempt_number']);
+    final maxResubmits = valueInt(widget.assignment['max_resubmits']);
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: ListView(
@@ -1868,6 +1903,15 @@ class _AssignmentSubmitSheetState extends State<_AssignmentSubmitSheet> {
               'description',
             ], fallback: 'Tavsif berilmagan.'),
           ),
+          if (attempt != null) ...[
+            const SizedBox(height: 12),
+            _InlineMessage(
+              text: maxResubmits == null
+                  ? '$attempt-urinish · ${valueText(widget.submission!, const ['status'])}'
+                  : '$attempt / ${maxResubmits + 1}-urinish · ${valueText(widget.submission!, const ['status'])}',
+              error: false,
+            ),
+          ],
           const SizedBox(height: 18),
           TextField(
             controller: _text,
@@ -1950,7 +1994,13 @@ class _AssignmentSubmitSheetState extends State<_AssignmentSubmitSheet> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.cloud_upload_outlined),
-              label: Text(_busy ? 'Yuborilmoqda…' : 'Serverga topshirish'),
+              label: Text(
+                _busy
+                    ? 'Yuborilmoqda…'
+                    : widget.submission == null
+                    ? 'Serverga topshirish'
+                    : 'Yangi urinishni topshirish',
+              ),
             )
           else
             OutlinedButton(
@@ -2009,7 +2059,44 @@ class _SchedulePortalPage extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 24),
+        if (portal.timeSlots.isNotEmpty || portal.lessonTypes.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _SectionCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _DensePanelHeader(
+                  title: 'Jadval katalogi',
+                  meta:
+                      '${portal.timeSlots.length} vaqt · ${portal.lessonTypes.length} tur',
+                  icon: Icons.tune_rounded,
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 7,
+                  runSpacing: 7,
+                  children: [
+                    for (final slot in portal.timeSlots)
+                      _CatalogPill(
+                        icon: Icons.schedule_rounded,
+                        label: valueText(slot, const [
+                          'name',
+                        ], fallback: 'Vaqt oralig‘i'),
+                        detail:
+                            '${valueText(slot, const ['start_time', 'starts_at'])}–${valueText(slot, const ['end_time', 'ends_at'])}',
+                      ),
+                    for (final type in portal.lessonTypes)
+                      _CatalogPill(
+                        icon: Icons.category_outlined,
+                        label: valueText(type, const ['name', 'title']),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
         _PageSectionTitle(title: 'Darslar', count: rows.length),
         const SizedBox(height: 10),
         if (rows.isEmpty)
@@ -2034,7 +2121,7 @@ class _SchedulePortalPage extends StatelessWidget {
                       ),
                       child: Column(
                         children: [
-                          Text(_dateLabel(lesson['starts_at']).substring(0, 5)),
+                          Text(_compactDateLabel(lesson['starts_at'])),
                           Text(
                             _timeOnly(lesson['starts_at']),
                             style: Theme.of(context).textTheme.labelSmall,
@@ -2071,6 +2158,40 @@ class _SchedulePortalPage extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _CatalogPill extends StatelessWidget {
+  const _CatalogPill({required this.icon, required this.label, this.detail});
+
+  final IconData icon;
+  final String label;
+  final String? detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: colors.primary),
+          const SizedBox(width: 6),
+          Text(
+            detail == null || detail == '—–—' ? label : '$label · $detail',
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2320,18 +2441,25 @@ class _AcademicsPortalPage extends StatelessWidget {
             ),
           ],
         ),
-        if (portal.examTypes.isNotEmpty) ...[
-          const SizedBox(height: 18),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final type in portal.examTypes)
-                Chip(
-                  avatar: const Icon(Icons.quiz_outlined, size: 17),
-                  label: Text(valueText(type, const ['name'])),
-                ),
-            ],
+        if (portal.examTypes.isNotEmpty || portal.subjects.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _SectionCard(
+            child: Wrap(
+              spacing: 7,
+              runSpacing: 7,
+              children: [
+                for (final subject in portal.subjects)
+                  _CatalogPill(
+                    icon: Icons.menu_book_outlined,
+                    label: valueText(subject, const ['name', 'title']),
+                  ),
+                for (final type in portal.examTypes)
+                  _CatalogPill(
+                    icon: Icons.quiz_outlined,
+                    label: valueText(type, const ['name', 'title']),
+                  ),
+              ],
+            ),
           ),
         ],
         if (grades.isNotEmpty) ...[
@@ -2587,64 +2715,88 @@ class _ContentPortalPageState extends State<_ContentPortalPage> {
   }
 
   Widget _files(BuildContext context, PortalController portal) {
-    if (portal.files.isEmpty) {
+    if (portal.files.isEmpty && portal.folders.isEmpty) {
       return const _EmptyState(
         icon: Icons.folder_open_outlined,
         title: 'Fayl yo‘q',
         message: 'Tasdiqlangan fayllar shu yerda ko‘rinadi.',
       );
     }
-    return _SimpleRows(
-      rows: portal.files,
-      icon: Icons.insert_drive_file_outlined,
-      title: (row) => valueText(row, const ['title']),
-      subtitle: (row) =>
-          '${valueText(row, const ['lesson_title', 'folder_name'], fallback: 'Material')} · ${_fileSize(row['size_bytes'])}',
-      trailing: (row) => row['is_downloadable'] == true
-          ? IconButton(
-              tooltip: 'Faylni ochish',
-              onPressed: () async {
-                final id = valueInt(row['id']);
-                if (id == null) return;
-                try {
-                  final url = await portal.contentDownloadUrl(id);
-                  if (context.mounted) await _launch(context, url);
-                } on Object catch (error) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text(_errorText(error))));
-                  }
-                }
-              },
-              icon: const Icon(Icons.download_outlined),
-            )
-          : const Tooltip(
-              message: 'Yuklab olish yopiq',
-              child: Icon(Icons.lock_outline_rounded),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (portal.folders.isNotEmpty)
+          _SectionCard(
+            child: Wrap(
+              spacing: 7,
+              runSpacing: 7,
+              children: [
+                for (final folder in portal.folders)
+                  _CatalogPill(
+                    icon: Icons.folder_outlined,
+                    label: valueText(folder, const ['name', 'title']),
+                  ),
+              ],
             ),
-      onTap: (row) {
-        final id = valueInt(row['id']);
-        if (id != null) {
-          unawaited(portal.trackContentView(id));
-          unawaited(
-            _showJsonDetail(
-              context,
-              title: valueText(row, const ['title']),
-              fields: {
-                'Dars yoki papka': valueText(row, const [
-                  'lesson_title',
-                  'folder_name',
-                ], fallback: 'Material'),
-                'Turi': valueText(row, const ['content_type']),
-                'Hajmi': _fileSize(row['size_bytes']),
-                'Versiya': '${row['version'] ?? 1}',
-                'Holat': _statusLabel('${row['status']}'),
-              },
-            ),
-          );
-        }
-      },
+          ),
+        if (portal.folders.isNotEmpty && portal.files.isNotEmpty)
+          const SizedBox(height: 10),
+        if (portal.files.isEmpty)
+          const _CompactEmpty(message: 'Bu papkalarda hozircha fayl yo‘q.')
+        else
+          _SimpleRows(
+            rows: portal.files,
+            icon: Icons.insert_drive_file_outlined,
+            title: (row) => valueText(row, const ['title']),
+            subtitle: (row) =>
+                '${valueText(row, const ['lesson_title', 'folder_name'], fallback: 'Material')} · ${_fileSize(row['size_bytes'])}',
+            trailing: (row) => row['is_downloadable'] == true
+                ? IconButton(
+                    tooltip: 'Faylni ochish',
+                    onPressed: () async {
+                      final id = valueInt(row['id']);
+                      if (id == null) return;
+                      try {
+                        final url = await portal.contentDownloadUrl(id);
+                        if (context.mounted) await _launch(context, url);
+                      } on Object catch (error) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(_errorText(error))),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.download_outlined),
+                  )
+                : const Tooltip(
+                    message: 'Yuklab olish yopiq',
+                    child: Icon(Icons.lock_outline_rounded),
+                  ),
+            onTap: (row) {
+              final id = valueInt(row['id']);
+              if (id != null) {
+                unawaited(portal.trackContentView(id));
+                unawaited(
+                  _showJsonDetail(
+                    context,
+                    title: valueText(row, const ['title']),
+                    fields: {
+                      'Dars yoki papka': valueText(row, const [
+                        'lesson_title',
+                        'folder_name',
+                      ], fallback: 'Material'),
+                      'Turi': valueText(row, const ['content_type']),
+                      'Hajmi': _fileSize(row['size_bytes']),
+                      'Versiya': '${row['version'] ?? 1}',
+                      'Holat': _statusLabel('${row['status']}'),
+                    },
+                  ),
+                );
+              }
+            },
+          ),
+      ],
     );
   }
 
@@ -2659,6 +2811,22 @@ class _ContentPortalPageState extends State<_ContentPortalPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (portal.libraries.isNotEmpty) ...[
+          _SectionCard(
+            child: Wrap(
+              spacing: 7,
+              runSpacing: 7,
+              children: [
+                for (final library in portal.libraries)
+                  _CatalogPill(
+                    icon: Icons.local_library_outlined,
+                    label: valueText(library, const ['name', 'title']),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
         _ResponsiveGrid(
           children: [
             _MetricCard(
@@ -2835,6 +3003,266 @@ Future<void> _showJsonDetail(
   ),
 );
 
+class _AiPortalPage extends StatelessWidget {
+  const _AiPortalPage();
+
+  @override
+  Widget build(BuildContext context) {
+    final portal = PortalScope.of(context);
+    final budget = portal.aiBudget;
+    final usage = portal.aiUsage;
+    final requests = portal.aiRequests;
+    final totalRequests =
+        valueInt(
+          usage['total_requests'] ??
+              usage['request_count'] ??
+              usage['requests'],
+        ) ??
+        requests.length;
+    final totalTokens =
+        valueInt(
+          usage['total_tokens'] ?? usage['tokens'] ?? usage['token_count'],
+        ) ??
+        0;
+    final remaining =
+        budget['remaining'] ??
+        budget['remaining_budget'] ??
+        budget['available'] ??
+        budget['balance'];
+    final spent =
+        budget['spent'] ??
+        budget['used'] ??
+        usage['total_cost'] ??
+        usage['cost'];
+    return _PortalPage(
+      title: portal.isParent ? 'AI nazorat tahlili' : 'AI o‘qish yordamchisi',
+      subtitle: portal.isParent
+          ? 'Server qayd etgan AI so‘rovlari va foydalanish holati.'
+          : 'O‘qish jarayonida bajarilgan AI so‘rovlari va ularning holati.',
+      section: PortalSection.ai,
+      trailing: const _LiveBadge(
+        label: 'SERVER AI',
+        icon: Icons.auto_awesome_rounded,
+      ),
+      children: [
+        _AiInsightCard(parent: portal.isParent, requests: requests),
+        const SizedBox(height: 12),
+        _ResponsiveGrid(
+          minWidth: 170,
+          children: [
+            _MetricCard(
+              label: 'AI so‘rovlari',
+              value: '$totalRequests',
+              icon: Icons.chat_bubble_outline_rounded,
+            ),
+            _MetricCard(
+              label: 'Tokenlar',
+              value: totalTokens == 0 ? '—' : '$totalTokens',
+              icon: Icons.data_usage_rounded,
+            ),
+            _MetricCard(
+              label: 'Qolgan limit',
+              value: remaining == null ? '—' : '$remaining',
+              icon: Icons.speed_rounded,
+            ),
+            _MetricCard(
+              label: 'Sarflangan',
+              value: spent == null ? '—' : '$spent',
+              icon: Icons.payments_outlined,
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _SectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _DensePanelHeader(
+                title: 'So‘rovlar tarixi',
+                meta: '${requests.length} ta yozuv',
+                icon: Icons.history_rounded,
+              ),
+              const SizedBox(height: 10),
+              if (requests.isEmpty)
+                const _CompactEmpty(
+                  message: 'Serverda AI so‘rovlari hali qayd etilmagan.',
+                )
+              else
+                for (final request in requests.take(30))
+                  _AiRequestTile(request: request),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AiInsightCard extends StatelessWidget {
+  const _AiInsightCard({required this.parent, required this.requests});
+
+  final bool parent;
+  final List<Map<String, Object?>> requests;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: dark
+              ? [colors.secondaryContainer, colors.surfaceContainerHigh]
+              : const [Sf.aiBg1, Sf.aiBg2],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Sf.aiBorder),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final icon = Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Sf.ai.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: const Icon(
+              Icons.auto_awesome_rounded,
+              size: 21,
+              color: Sf.ai,
+            ),
+          );
+          final copy = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                parent ? 'Oila uchun AI signallari' : 'Shaxsiy AI faoliyati',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Sf.ai,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                requests.isEmpty
+                    ? 'AI xulosasi uchun serverda hali yetarli so‘rov tarixi yo‘q.'
+                    : 'Oxirgi ${requests.length} ta AI so‘rovi serverdan olindi. Har bir holat quyida ko‘rsatilgan.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Sf.accentInk,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          );
+          if (constraints.maxWidth < 430) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [icon, const SizedBox(height: 10), copy],
+            );
+          }
+          return Row(
+            children: [
+              icon,
+              const SizedBox(width: 12),
+              Expanded(child: copy),
+              Icon(Icons.arrow_forward_rounded, color: colors.tertiary),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AiRequestTile extends StatelessWidget {
+  const _AiRequestTile({required this.request});
+
+  final Map<String, Object?> request;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = valueText(request, const [
+      'status',
+      'state',
+    ], fallback: 'unknown');
+    final positive = const {
+      'completed',
+      'success',
+      'succeeded',
+      'done',
+    }.contains(status.toLowerCase());
+    final pending = const {
+      'pending',
+      'queued',
+      'processing',
+      'running',
+    }.contains(status.toLowerCase());
+    final title = valueText(request, const [
+      'title',
+      'purpose',
+      'request_type',
+      'kind',
+      'prompt',
+    ], fallback: 'AI so‘rovi');
+    final detail = valueText(request, const [
+      'model',
+      'provider',
+      'response_summary',
+      'error_message',
+    ], fallback: 'Server so‘rovi');
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Sf.ai.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: const Icon(
+              Icons.auto_awesome_outlined,
+              size: 18,
+              color: Sf.ai,
+            ),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+                Text(
+                  '$detail · ${_dateLabel(request['created_at'], time: true)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          _StatusPill(status, positive: positive, warning: pending),
+        ],
+      ),
+    );
+  }
+}
+
 class _RebuiltMessagesPortalPage extends StatefulWidget {
   const _RebuiltMessagesPortalPage();
 
@@ -2879,8 +3307,8 @@ class _RebuiltMessagesPortalPageState
     final effectiveId = selectedId ?? valueInt(threads.firstOrNull?['id']);
     final desktop = MediaQuery.sizeOf(context).width >= 1100;
     if (!desktop) {
-      final availableHeight = (MediaQuery.sizeOf(context).height - 250).clamp(
-        430.0,
+      final availableHeight = (MediaQuery.sizeOf(context).height - 230).clamp(
+        280.0,
         760.0,
       );
       return _PortalPage(
@@ -2935,24 +3363,15 @@ class _RebuiltMessagesPortalPageState
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: Theme.of(context).colorScheme.outlineVariant,
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.shadow.withValues(alpha: 0.06),
-                    blurRadius: 24,
-                    offset: const Offset(0, 9),
-                  ),
-                ],
               ),
               child: Row(
                 children: [
                   SizedBox(
-                    width: 356,
+                    width: 340,
                     child: _WorkspaceConversationList(
                       portal: portal,
                       threads: threads,
@@ -3124,11 +3543,13 @@ class _RebuiltMessagesPortalPageState
                 const SizedBox(height: 14),
                 TextField(
                   controller: subject,
+                  onChanged: (_) => setSheetState(() {}),
                   decoration: const InputDecoration(labelText: 'Mavzu'),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: body,
+                  onChanged: (_) => setSheetState(() {}),
                   minLines: 2,
                   maxLines: 4,
                   decoration: const InputDecoration(
@@ -3137,7 +3558,10 @@ class _RebuiltMessagesPortalPageState
                 ),
                 const SizedBox(height: 16),
                 FilledButton.icon(
-                  onPressed: selected.isEmpty
+                  onPressed:
+                      selected.isEmpty ||
+                          (subject.text.trim().isEmpty &&
+                              body.text.trim().isEmpty)
                       ? null
                       : () => Navigator.pop(sheetContext, true),
                   icon: const Icon(Icons.arrow_forward_rounded),
@@ -3199,31 +3623,15 @@ class _WorkspaceHeader extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 46,
-            height: 46,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Theme.of(context).colorScheme.primary,
-                  Theme.of(context).colorScheme.tertiary,
-                ],
-              ),
+              color: Theme.of(context).colorScheme.primaryContainer,
               borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.primary.withValues(alpha: 0.2),
-                  blurRadius: 14,
-                  offset: const Offset(0, 5),
-                ),
-              ],
             ),
-            child: const Icon(
+            child: Icon(
               Icons.forum_rounded,
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.primary,
               size: 21,
             ),
           ),
@@ -3234,8 +3642,8 @@ class _WorkspaceHeader extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  portal.isParent ? 'Maktab bilan aloqa' : 'Chat workspace',
-                  style: Theme.of(context).textTheme.titleLarge,
+                  portal.isParent ? 'Maktab bilan aloqa' : 'Suhbatlar',
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
                 Text(
                   unread == 0
@@ -3308,9 +3716,7 @@ class _WorkspaceStat extends StatelessWidget {
         Icon(
           icon,
           size: icon == Icons.circle ? 8 : 16,
-          color: positive
-              ? const Color(0xFF20A96B)
-              : Theme.of(context).colorScheme.primary,
+          color: positive ? Sf.success : Theme.of(context).colorScheme.primary,
         ),
         const SizedBox(width: 6),
         Text(
@@ -3593,25 +3999,25 @@ class _WorkspaceConversationTile extends StatelessWidget {
                       height: 48,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: selected
-                              ? [colors.primary, colors.tertiary]
-                              : const [Color(0xFF273149), Color(0xFF4B5875)],
-                        ),
+                        color: selected
+                            ? colors.primary
+                            : colors.surfaceContainerHighest,
                         shape: BoxShape.circle,
                       ),
                       child: participants > 2
-                          ? const Icon(
+                          ? Icon(
                               Icons.groups_2_rounded,
-                              color: Colors.white,
+                              color: selected
+                                  ? colors.onPrimary
+                                  : colors.onSurfaceVariant,
                               size: 22,
                             )
                           : Text(
                               _initials(title),
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: selected
+                                    ? colors.onPrimary
+                                    : colors.onSurfaceVariant,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w900,
                               ),
@@ -3625,7 +4031,7 @@ class _WorkspaceConversationTile extends StatelessWidget {
                           width: 13,
                           height: 13,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF20A96B),
+                            color: Sf.success,
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: selected
@@ -4574,7 +4980,7 @@ class _MessengerStat extends StatelessWidget {
           Icon(
             icon,
             size: icon == Icons.circle ? 9 : 16,
-            color: positive ? const Color(0xFF20A96B) : colors.primary,
+            color: positive ? Sf.success : colors.primary,
           ),
           const SizedBox(width: 6),
           Text(
@@ -4687,7 +5093,7 @@ class _ConversationTile extends StatelessWidget {
                       width: 13,
                       height: 13,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF27A86B),
+                        color: Sf.success,
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: selected
@@ -5049,20 +5455,14 @@ class _ThreadScreenState extends State<_ThreadScreen> {
           code: 'voice_recording_failed',
         );
       }
-      final response = await http.get(Uri.parse(path));
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw const ApiException(
-          message: 'Ovozli xabarni o‘qib bo‘lmadi.',
-          code: 'voice_recording_failed',
-        );
-      }
+      final bytes = await readRecordedFileBytes(path);
       final seconds = duration.inSeconds.clamp(1, 599);
       final filename =
           'voice-${seconds}s-${DateTime.now().millisecondsSinceEpoch}.$_voiceExtension';
       final file = PlatformFile(
         name: filename,
-        size: response.bodyBytes.length,
-        bytes: response.bodyBytes,
+        size: bytes.length,
+        bytes: bytes,
       );
       if (mounted) {
         setState(() {
@@ -5242,11 +5642,14 @@ class _ThreadScreenState extends State<_ThreadScreen> {
     ], fallback: '');
     final canWrite = portal.can('messaging:write');
     final colors = Theme.of(context).colorScheme;
+    final narrowHeader = MediaQuery.sizeOf(context).width < 430;
     return Scaffold(
       backgroundColor: colors.surfaceContainerLowest,
       appBar: AppBar(
         key: const ValueKey('family-chat-header'),
         automaticallyImplyLeading: false,
+        toolbarHeight: 62,
+        shape: Border(bottom: BorderSide(color: colors.outlineVariant)),
         leading: widget.embedded
             ? null
             : IconButton(
@@ -5278,7 +5681,7 @@ class _ThreadScreenState extends State<_ThreadScreen> {
                       width: 11,
                       height: 11,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF27A86B),
+                        color: Sf.success,
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: Theme.of(context).colorScheme.surface,
@@ -5305,7 +5708,7 @@ class _ThreadScreenState extends State<_ThreadScreen> {
                           ], fallback: 'Maktab kontakti'),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: contact['is_online'] == true
-                          ? const Color(0xFF20A96B)
+                          ? Sf.success
                           : colors.onSurfaceVariant,
                     ),
                   ),
@@ -5325,25 +5728,52 @@ class _ThreadScreenState extends State<_ThreadScreen> {
               _searching ? Icons.search_off_rounded : Icons.search_rounded,
             ),
           ),
-          IconButton(
-            tooltip: 'Yangilash',
-            onPressed: _loadingMessages
-                ? null
-                : () => _loadCurrentMessages(force: true),
-            icon: _loadingMessages
-                ? const SizedBox.square(
-                    dimension: 17,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh_rounded),
-          ),
-          IconButton(
-            tooltip: thread?['notifications_muted'] == true
-                ? 'Bildirishnomani yoqish'
-                : 'Ovozsiz qilish',
-            onPressed: thread == null
-                ? null
-                : () => _runAction(
+          if (!narrowHeader)
+            IconButton(
+              tooltip: 'Yangilash',
+              onPressed: _loadingMessages
+                  ? null
+                  : () => _loadCurrentMessages(force: true),
+              icon: _loadingMessages
+                  ? const SizedBox.square(
+                      dimension: 17,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh_rounded),
+            ),
+          if (!narrowHeader)
+            IconButton(
+              tooltip: thread?['notifications_muted'] == true
+                  ? 'Bildirishnomani yoqish'
+                  : 'Ovozsiz qilish',
+              onPressed: thread == null
+                  ? null
+                  : () => _runAction(
+                      context,
+                      () => portal.setThreadMuted(
+                        widget.threadId,
+                        thread['notifications_muted'] != true,
+                      ),
+                      success: thread['notifications_muted'] == true
+                          ? 'Bildirishnomalar yoqildi.'
+                          : 'Suhbat ovozsiz qilindi.',
+                    ),
+              icon: Icon(
+                thread?['notifications_muted'] == true
+                    ? Icons.notifications_off_outlined
+                    : Icons.notifications_outlined,
+              ),
+            ),
+          if (narrowHeader)
+            PopupMenuButton<String>(
+              tooltip: 'Suhbat amallari',
+              onSelected: (value) {
+                if (value == 'refresh') {
+                  _loadCurrentMessages(force: true);
+                  return;
+                }
+                if (value == 'mute' && thread != null) {
+                  _runAction(
                     context,
                     () => portal.setThreadMuted(
                       widget.threadId,
@@ -5352,13 +5782,35 @@ class _ThreadScreenState extends State<_ThreadScreen> {
                     success: thread['notifications_muted'] == true
                         ? 'Bildirishnomalar yoqildi.'
                         : 'Suhbat ovozsiz qilindi.',
+                  );
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'refresh',
+                  child: ListTile(
+                    leading: Icon(Icons.refresh_rounded),
+                    title: Text('Yangilash'),
                   ),
-            icon: Icon(
-              thread?['notifications_muted'] == true
-                  ? Icons.notifications_off_outlined
-                  : Icons.notifications_outlined,
+                ),
+                PopupMenuItem(
+                  value: 'mute',
+                  enabled: thread != null,
+                  child: ListTile(
+                    leading: Icon(
+                      thread?['notifications_muted'] == true
+                          ? Icons.notifications_outlined
+                          : Icons.notifications_off_outlined,
+                    ),
+                    title: Text(
+                      thread?['notifications_muted'] == true
+                          ? 'Bildirishnomani yoqish'
+                          : 'Ovozsiz qilish',
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
         ],
       ),
       body: Column(
@@ -5538,8 +5990,9 @@ class _ThreadScreenState extends State<_ThreadScreen> {
           SafeArea(
             top: false,
             child: Material(
-              elevation: 2,
+              elevation: 0,
               color: colors.surface,
+              shape: Border(top: BorderSide(color: colors.outlineVariant)),
               child: canWrite
                   ? Padding(
                       padding: const EdgeInsets.fromLTRB(10, 9, 10, 10),
@@ -6399,10 +6852,11 @@ class _MessageBubble extends StatelessWidget {
               .where((item) => item.isNotEmpty)
               .toList()
         : const <String>[];
-    final foreground = mine ? colors.onPrimaryContainer : colors.onSurface;
-    final bubbleColor = mine
-        ? colors.primaryContainer
-        : colors.surface.withValues(alpha: 0.97);
+    final foreground = mine ? colors.onPrimary : colors.onSurface;
+    final bubbleColor = mine ? colors.primary : colors.surface;
+    final maxBubbleWidth = (MediaQuery.sizeOf(context).width * 0.76)
+        .clamp(220.0, 560.0)
+        .toDouble();
     return Column(
       children: [
         if (showDate)
@@ -6433,7 +6887,7 @@ class _MessageBubble extends StatelessWidget {
         Align(
           alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
+            constraints: BoxConstraints(maxWidth: maxBubbleWidth),
             child: GestureDetector(
               onLongPress: body.isEmpty
                   ? null
@@ -6451,23 +6905,14 @@ class _MessageBubble extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: bubbleColor,
                   border: Border.all(
-                    color: mine
-                        ? colors.primary.withValues(alpha: 0.12)
-                        : colors.outlineVariant.withValues(alpha: 0.78),
+                    color: mine ? colors.primary : colors.outlineVariant,
                   ),
                   borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(!mine && !firstInGroup ? 7 : 18),
-                    topRight: Radius.circular(mine && !firstInGroup ? 7 : 18),
-                    bottomLeft: Radius.circular(!mine && lastInGroup ? 5 : 18),
-                    bottomRight: Radius.circular(mine && lastInGroup ? 5 : 18),
+                    topLeft: Radius.circular(!mine && !firstInGroup ? 7 : 15),
+                    topRight: Radius.circular(mine && !firstInGroup ? 7 : 15),
+                    bottomLeft: Radius.circular(!mine && lastInGroup ? 4 : 15),
+                    bottomRight: Radius.circular(mine && lastInGroup ? 4 : 15),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: colors.shadow.withValues(alpha: 0.055),
-                      blurRadius: 7,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -6506,10 +6951,11 @@ class _MessageBubble extends StatelessWidget {
                       children: [
                         Text(
                           _timeOnly(message['created_at']),
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
-                                color: foreground.withValues(alpha: 0.72),
-                              ),
+                          style: Sf.monoStyle(
+                            size: 8.5,
+                            weight: FontWeight.w500,
+                            color: foreground.withValues(alpha: 0.72),
+                          ),
                         ),
                         if (mine) ...[
                           const SizedBox(width: 3),
@@ -6521,7 +6967,7 @@ class _MessageBubble extends StatelessWidget {
                                   : Icons.done_rounded,
                               size: 16,
                               color: readByOther
-                                  ? colors.primary
+                                  ? (mine ? colors.onPrimary : colors.primary)
                                   : foreground.withValues(alpha: 0.68),
                             ),
                           ),
@@ -6554,12 +7000,10 @@ class _MessageAttachmentTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final audio = _isAudioAttachment(keyName);
-    final foreground = mine
-        ? colors.onPrimaryContainer
-        : colors.onSurfaceVariant;
+    final foreground = mine ? colors.onPrimary : colors.onSurfaceVariant;
     return Material(
       color: mine
-          ? colors.surface.withValues(alpha: 0.47)
+          ? colors.surface.withValues(alpha: 0.18)
           : colors.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
@@ -6733,6 +7177,11 @@ class _NotificationsPortalPage extends StatelessWidget {
                   ),
                 );
               }
+              final destination = _notificationDestination(row, portal);
+              if (destination != null) {
+                _PortalNavigationScope.go(context, destination);
+                return;
+              }
               _showJsonDetail(
                 context,
                 title: valueText(row, const [
@@ -6755,6 +7204,54 @@ class _NotificationsPortalPage extends StatelessWidget {
       ],
     );
   }
+}
+
+PortalSection? _notificationDestination(
+  Map<String, Object?> notification,
+  PortalController portal,
+) {
+  final payload = <String, dynamic>{
+    for (final entry in notification.entries) entry.key: entry.value,
+  };
+  final nested = notification['data'] ?? notification['payload'];
+  if (nested is Map) {
+    for (final entry in nested.entries) {
+      payload['${entry.key}'] = entry.value;
+    }
+  }
+  final eventType = valueText(notification, const [
+    'event_type',
+    'type',
+  ], fallback: '');
+  if (eventType.isNotEmpty) payload.putIfAbsent('resource', () => eventType);
+  final route = notificationRouteFromPayload(payload);
+  return switch (route) {
+    'messages' when portal.can('messaging:read') => PortalSection.messages,
+    'assignments' when portal.can('assignments:read') =>
+      PortalSection.assignments,
+    'schedule' ||
+    'calendar' when portal.can('schedule:read') => PortalSection.schedule,
+    'attendance' when portal.can('attendance:read') => PortalSection.attendance,
+    'academics' ||
+    'grades' ||
+    'exams' when portal.can('academics:read') => PortalSection.academics,
+    'content' ||
+    'courses' ||
+    'materials' when portal.can('content:read') => PortalSection.content,
+    'ai' || 'assistant' when portal.can('ai:read') => PortalSection.ai,
+    'forms' when portal.can('forms:read') => PortalSection.forms,
+    'achievements' when portal.can('achievements:read') =>
+      PortalSection.achievements,
+    'discipline' ||
+    'rules' ||
+    'penalties' when portal.can('penalty:read') => PortalSection.discipline,
+    'finance' ||
+    'payments' when portal.can('finance:read_own') => PortalSection.finance,
+    'cards' || 'wallet' when portal.can('card:read') => PortalSection.cards,
+    'account' => PortalSection.account,
+    'students' || 'parents' || 'identity' => PortalSection.identity,
+    _ => null,
+  };
 }
 
 class _NotificationPreferences extends StatefulWidget {
@@ -6962,47 +7459,54 @@ class _FormFillScreenState extends State<_FormFillScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(valueText(widget.form, const ['title']))),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Text(
-            valueText(widget.form, const ['description'], fallback: ''),
-            style: Theme.of(context).textTheme.bodyLarge,
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              Text(
+                valueText(widget.form, const ['description'], fallback: ''),
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              if (widget.form['is_anonymous'] == true) ...[
+                const SizedBox(height: 12),
+                const _InlineMessage(
+                  text:
+                      'Bu anonim so‘rovnoma. Ismingiz javobga biriktirilmaydi.',
+                  error: false,
+                ),
+              ],
+              const SizedBox(height: 20),
+              for (final field in fields) ...[
+                _FormFieldEditor(
+                  field: field,
+                  controller: _controllerFor(field),
+                  value: _answerFor(field),
+                  onChanged: (value) {
+                    final id = valueInt(field['id']);
+                    if (id != null) setState(() => _answers[id] = value);
+                  },
+                ),
+                const SizedBox(height: 16),
+              ],
+              if (_error case final error?)
+                _InlineMessage(text: error, error: true),
+              const SizedBox(height: 18),
+              FilledButton.icon(
+                onPressed: _busy ? null : _submit,
+                icon: _busy
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send_outlined),
+                label: Text(_busy ? 'Yuborilmoqda…' : 'Javobni yuborish'),
+              ),
+            ],
           ),
-          if (widget.form['is_anonymous'] == true) ...[
-            const SizedBox(height: 12),
-            const _InlineMessage(
-              text: 'Bu anonim so‘rovnoma. Ismingiz javobga biriktirilmaydi.',
-              error: false,
-            ),
-          ],
-          const SizedBox(height: 20),
-          for (final field in fields) ...[
-            _FormFieldEditor(
-              field: field,
-              controller: _controllerFor(field),
-              value: _answerFor(field),
-              onChanged: (value) {
-                final id = valueInt(field['id']);
-                if (id != null) setState(() => _answers[id] = value);
-              },
-            ),
-            const SizedBox(height: 16),
-          ],
-          if (_error case final error?)
-            _InlineMessage(text: error, error: true),
-          const SizedBox(height: 18),
-          FilledButton.icon(
-            onPressed: _busy ? null : _submit,
-            icon: _busy
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.send_outlined),
-            label: Text(_busy ? 'Yuborilmoqda…' : 'Javobni yuborish'),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -7101,19 +7605,43 @@ class _FormFieldEditor extends StatelessWidget {
         ),
       );
     }
+    if (type == 'date') {
+      return TextField(
+        controller: controller,
+        readOnly: true,
+        onTap: () async {
+          final now = DateTime.now();
+          final current = DateTime.tryParse(controller?.text ?? '');
+          final selected = await showDatePicker(
+            context: context,
+            initialDate: current ?? now,
+            firstDate: DateTime(now.year - 100),
+            lastDate: DateTime(now.year + 10),
+          );
+          if (selected == null) return;
+          final formatted =
+              '${selected.year.toString().padLeft(4, '0')}-${selected.month.toString().padLeft(2, '0')}-${selected.day.toString().padLeft(2, '0')}';
+          controller?.text = formatted;
+          onChanged(formatted);
+        },
+        decoration: InputDecoration(
+          labelText: label,
+          helperText: valueText(field, const ['help_text'], fallback: ''),
+          hintText: 'YYYY-MM-DD',
+          suffixIcon: const Icon(Icons.calendar_today_outlined),
+        ),
+      );
+    }
     return TextField(
       controller: controller,
       minLines: type == 'textarea' ? 4 : 1,
       maxLines: type == 'textarea' ? 8 : 1,
       keyboardType: type == 'number'
           ? const TextInputType.numberWithOptions(decimal: true)
-          : type == 'date'
-          ? TextInputType.datetime
           : TextInputType.text,
       decoration: InputDecoration(
         labelText: label,
         helperText: valueText(field, const ['help_text'], fallback: ''),
-        hintText: type == 'date' ? 'YYYY-MM-DD' : null,
         alignLabelWithHint: type == 'textarea',
       ),
     );
@@ -7578,50 +8106,7 @@ class _AccountPortalPage extends StatelessWidget {
       subtitle: 'Shaxsiy ma’lumotlar, qurilmalar, parol va ilova ko‘rinishi.',
       section: PortalSection.account,
       children: [
-        _SectionCard(
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 34,
-                child: Text(_initials(portal.displayName)),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      portal.displayName,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${portal.isParent ? 'Ota-ona' : 'O‘quvchi'} · ${valueText(portal.profile, const ['username'])}',
-                    ),
-                    Text(
-                      valueText(portal.profile, const [
-                        'phone',
-                        'email',
-                      ], fallback: 'Aloqa ma’lumoti yo‘q'),
-                    ),
-                  ],
-                ),
-              ),
-              FilledButton.tonalIcon(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => PortalScope(
-                      controller: portal,
-                      child: const _ProfileEditScreen(),
-                    ),
-                  ),
-                ),
-                icon: const Icon(Icons.edit_outlined),
-                label: const Text('Tahrirlash'),
-              ),
-            ],
-          ),
-        ),
+        _SectionCard(child: _AccountIdentityHeader(portal: portal)),
         const SizedBox(height: 24),
         const _PageSectionTitle(title: 'Ilova ko‘rinishi'),
         const SizedBox(height: 10),
@@ -7770,6 +8255,78 @@ class _AccountPortalPage extends StatelessWidget {
   }
 }
 
+class _AccountIdentityHeader extends StatelessWidget {
+  const _AccountIdentityHeader({required this.portal});
+
+  final PortalController portal;
+
+  @override
+  Widget build(BuildContext context) {
+    final avatar = CircleAvatar(
+      radius: 30,
+      child: Text(_initials(portal.displayName)),
+    );
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(portal.displayName, style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 4),
+        Text(
+          '${portal.isParent ? 'Ota-ona' : 'O‘quvchi'} · ${valueText(portal.profile, const ['username'])}',
+        ),
+        Text(
+          valueText(portal.profile, const [
+            'phone',
+            'email',
+          ], fallback: 'Aloqa ma’lumoti yo‘q'),
+        ),
+      ],
+    );
+    final edit = FilledButton.tonalIcon(
+      onPressed: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => PortalScope(
+            controller: portal,
+            child: const _ProfileEditScreen(),
+          ),
+        ),
+      ),
+      icon: const Icon(Icons.edit_outlined),
+      label: const Text('Tahrirlash'),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 460) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  avatar,
+                  const SizedBox(width: 12),
+                  Expanded(child: details),
+                ],
+              ),
+              const SizedBox(height: 12),
+              edit,
+            ],
+          );
+        }
+        return Row(
+          children: [
+            avatar,
+            const SizedBox(width: 16),
+            Expanded(child: details),
+            const SizedBox(width: 12),
+            edit,
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _ProfileEditScreen extends StatefulWidget {
   const _ProfileEditScreen();
 
@@ -7846,45 +8403,51 @@ class _ProfileEditScreenState extends State<_ProfileEditScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Profilni tahrirlash')),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          TextField(
-            controller: _first,
-            decoration: const InputDecoration(labelText: 'Ism'),
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              TextField(
+                controller: _first,
+                decoration: const InputDecoration(labelText: 'Ism'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _last,
+                decoration: const InputDecoration(labelText: 'Familiya'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _middle,
+                decoration: const InputDecoration(labelText: 'Otasining ismi'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _phone,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Telefon'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _email,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(labelText: 'Email'),
+              ),
+              if (_error case final error?) ...[
+                const SizedBox(height: 14),
+                _InlineMessage(text: error, error: true),
+              ],
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: _busy ? null : _save,
+                child: Text(_busy ? 'Saqlanmoqda…' : 'Saqlash'),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _last,
-            decoration: const InputDecoration(labelText: 'Familiya'),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _middle,
-            decoration: const InputDecoration(labelText: 'Otasining ismi'),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _phone,
-            keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(labelText: 'Telefon'),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _email,
-            keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(labelText: 'Email'),
-          ),
-          if (_error case final error?) ...[
-            const SizedBox(height: 14),
-            _InlineMessage(text: error, error: true),
-          ],
-          const SizedBox(height: 20),
-          FilledButton(
-            onPressed: _busy ? null : _save,
-            child: Text(_busy ? 'Saqlanmoqda…' : 'Saqlash'),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -7941,38 +8504,44 @@ class _PasswordChangeScreenState extends State<_PasswordChangeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Parolni almashtirish')),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          TextField(
-            controller: _old,
-            obscureText: true,
-            decoration: const InputDecoration(labelText: 'Hozirgi parol'),
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680),
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              TextField(
+                controller: _old,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'Hozirgi parol'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _next,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'Yangi parol'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _confirm,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Yangi parolni takrorlang',
+                ),
+              ),
+              if (_error case final error?) ...[
+                const SizedBox(height: 14),
+                _InlineMessage(text: error, error: true),
+              ],
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: _busy ? null : _save,
+                child: Text(_busy ? 'Yangilanmoqda…' : 'Parolni yangilash'),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _next,
-            obscureText: true,
-            decoration: const InputDecoration(labelText: 'Yangi parol'),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _confirm,
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'Yangi parolni takrorlang',
-            ),
-          ),
-          if (_error case final error?) ...[
-            const SizedBox(height: 14),
-            _InlineMessage(text: error, error: true),
-          ],
-          const SizedBox(height: 20),
-          FilledButton(
-            onPressed: _busy ? null : _save,
-            child: Text(_busy ? 'Yangilanmoqda…' : 'Parolni yangilash'),
-          ),
-        ],
+        ),
       ),
     );
   }

@@ -154,6 +154,7 @@ Design principles:
   frontend;
 - browser access to the configured API hostname.
 - Java 17 and an Android SDK for Android builds;
+- macOS with Xcode and iOS 15.0 or newer for iOS builds;
 - a Firebase project configuration for real device push delivery.
 
 Check the local Flutter installation:
@@ -269,7 +270,8 @@ keys, API sessions, or user passwords.
   permission after a user signs in.
 - iOS declares the Push Notifications entitlement, enables the
   `remote-notification` background mode, requests alert/badge/sound permission,
-  and registers the APNs-backed FCM token after sign-in.
+  and registers the APNs-backed FCM token after sign-in. The deployment target
+  is iOS 15.0 because the resolved FlutterFire packages require it.
 - The backend sender and client application must use the same Firebase project.
   The Firebase project must contain an APNs authentication key for iOS.
 
@@ -277,8 +279,10 @@ keys, API sessions, or user passwords.
 
 The repository root contains `codemagic.yaml`. Its `ios-release` workflow
 formats, audits, analyzes, and tests the frontend, restores Firebase securely,
-fetches App Store signing files, and produces a signed IPA for bundle identifier
-`com.starforge.starforgeStudent`.
+fetches App Store signing files, verifies the production APNs entitlement,
+produces a signed IPA for bundle identifier `com.starforge.starforgeStudent`,
+and submits successful release builds to TestFlight. Secret-bearing signed
+builds run only for pushes/tags on `main`, never for pull requests.
 
 Create these encrypted variable groups in Codemagic before the first build:
 
@@ -372,12 +376,24 @@ For Firebase-enabled CI builds, configure these optional repository secrets:
 | `STARFORGE_FIREBASE_PROJECT_ID` | Firebase project ID |
 | `STARFORGE_FIREBASE_STORAGE_BUCKET` | Optional Firebase storage bucket |
 
+For signed Android release APK/AAB artifacts, configure all four signing
+secrets. When they are absent, CI intentionally produces only the debug QA APK.
+
+| Secret | Purpose |
+| --- | --- |
+| `STARFORGE_ANDROID_KEYSTORE_B64` | Base64-encoded upload keystore |
+| `STARFORGE_ANDROID_KEY_ALIAS` | Upload key alias |
+| `STARFORGE_ANDROID_KEY_PASSWORD` | Upload key password |
+| `STARFORGE_ANDROID_STORE_PASSWORD` | Keystore password |
+
 ## Production build
 
 Build an optimized Web release:
 
 ```bash
 flutter build web --release \
+  --optimization-level=2 \
+  --no-wasm-dry-run \
   --dart-define=API_BASE_URL=https://center.example.com
 ```
 

@@ -82,6 +82,8 @@ jobs:
       - name: Build Web release
         run: >-
           flutter build web --release
+          --optimization-level=2
+          --no-wasm-dry-run
           --dart-define=API_BASE_URL=https://starforge.78.111.91.113.nip.io
 
       - name: Upload Web artifact
@@ -123,6 +125,49 @@ jobs:
           GOOGLE_SERVICES_JSON_B64: ${{ secrets.STARFORGE_GOOGLE_SERVICES_JSON_B64 }}
         run: printf '%s' "$GOOGLE_SERVICES_JSON_B64" | base64 --decode > android/app/google-services.json
 
+      - name: Validate optional Firebase configuration
+        env:
+          FIREBASE_API_KEY: ${{ secrets.STARFORGE_FIREBASE_ANDROID_API_KEY }}
+          FIREBASE_APP_ID: ${{ secrets.STARFORGE_FIREBASE_ANDROID_APP_ID }}
+          FIREBASE_SENDER_ID: ${{ secrets.STARFORGE_FIREBASE_MESSAGING_SENDER_ID }}
+          FIREBASE_PROJECT_ID: ${{ secrets.STARFORGE_FIREBASE_PROJECT_ID }}
+        run: |
+          set -eu
+          configured=0
+          for value in "$FIREBASE_API_KEY" "$FIREBASE_APP_ID" "$FIREBASE_SENDER_ID" "$FIREBASE_PROJECT_ID"; do
+            if [ -n "$value" ]; then configured=$((configured + 1)); fi
+          done
+          if [ "$configured" -ne 0 ] && [ "$configured" -ne 4 ]; then
+            echo "Firebase dart-define secrets must be either all present or all absent."
+            exit 1
+          fi
+          if [ -f android/app/google-services.json ]; then
+            jq -e --arg package "com.starforge.starforge_student" \
+              '.client | any(.client_info.android_client_info.package_name == $package)' \
+              android/app/google-services.json >/dev/null
+          fi
+
+      - name: Restore optional Android release signing
+        if: ${{ secrets.STARFORGE_ANDROID_KEYSTORE_B64 != '' }}
+        env:
+          KEYSTORE_B64: ${{ secrets.STARFORGE_ANDROID_KEYSTORE_B64 }}
+          KEY_ALIAS: ${{ secrets.STARFORGE_ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.STARFORGE_ANDROID_KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.STARFORGE_ANDROID_STORE_PASSWORD }}
+        run: |
+          set -eu
+          test -n "$KEY_ALIAS"
+          test -n "$KEY_PASSWORD"
+          test -n "$STORE_PASSWORD"
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > android/app/upload-keystore.jks
+          test -s android/app/upload-keystore.jks
+          {
+            printf 'storeFile=upload-keystore.jks\n'
+            printf 'storePassword=%s\n' "$STORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$KEY_PASSWORD"
+          } > android/key.properties
+
       - name: Verify Gradle wrapper
         run: |
           test -f android/gradlew
@@ -139,6 +184,24 @@ jobs:
           --dart-define=STARFORGE_FIREBASE_PROJECT_ID=${{ secrets.STARFORGE_FIREBASE_PROJECT_ID }}
           --dart-define=STARFORGE_FIREBASE_STORAGE_BUCKET=${{ secrets.STARFORGE_FIREBASE_STORAGE_BUCKET }}
 
+      - name: Build signed release APK and App Bundle
+        if: ${{ secrets.STARFORGE_ANDROID_KEYSTORE_B64 != '' }}
+        run: |
+          flutter build apk --release --no-pub \
+            --dart-define=API_BASE_URL=https://starforge.78.111.91.113.nip.io \
+            --dart-define=STARFORGE_FIREBASE_ANDROID_API_KEY=${{ secrets.STARFORGE_FIREBASE_ANDROID_API_KEY }} \
+            --dart-define=STARFORGE_FIREBASE_ANDROID_APP_ID=${{ secrets.STARFORGE_FIREBASE_ANDROID_APP_ID }} \
+            --dart-define=STARFORGE_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.STARFORGE_FIREBASE_MESSAGING_SENDER_ID }} \
+            --dart-define=STARFORGE_FIREBASE_PROJECT_ID=${{ secrets.STARFORGE_FIREBASE_PROJECT_ID }} \
+            --dart-define=STARFORGE_FIREBASE_STORAGE_BUCKET=${{ secrets.STARFORGE_FIREBASE_STORAGE_BUCKET }}
+          flutter build appbundle --release --no-pub \
+            --dart-define=API_BASE_URL=https://starforge.78.111.91.113.nip.io \
+            --dart-define=STARFORGE_FIREBASE_ANDROID_API_KEY=${{ secrets.STARFORGE_FIREBASE_ANDROID_API_KEY }} \
+            --dart-define=STARFORGE_FIREBASE_ANDROID_APP_ID=${{ secrets.STARFORGE_FIREBASE_ANDROID_APP_ID }} \
+            --dart-define=STARFORGE_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.STARFORGE_FIREBASE_MESSAGING_SENDER_ID }} \
+            --dart-define=STARFORGE_FIREBASE_PROJECT_ID=${{ secrets.STARFORGE_FIREBASE_PROJECT_ID }} \
+            --dart-define=STARFORGE_FIREBASE_STORAGE_BUCKET=${{ secrets.STARFORGE_FIREBASE_STORAGE_BUCKET }}
+
       - name: Verify required Android permissions
         run: |
           grep -q 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml
@@ -147,10 +210,36 @@ jobs:
           grep -Rq 'android.permission.RECORD_AUDIO' build/app/intermediates/merged_manifest/debug
           grep -Rq 'android.permission.POST_NOTIFICATIONS' build/app/intermediates/merged_manifest/debug
 
+      - name: Verify Firebase build readiness when configured
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.STARFORGE_FIREBASE_PROJECT_ID }}
+        run: |
+          set -eu
+          test -s build/app/outputs/flutter-apk/app-debug.apk
+          if [ -f android/app/google-services.json ]; then
+            grep -Rq 'google_app_id' build/app/intermediates/packaged_res/debug
+          fi
+          if [ -n "$FIREBASE_PROJECT_ID" ]; then
+            test -n "${{ secrets.STARFORGE_FIREBASE_ANDROID_API_KEY }}"
+            test -n "${{ secrets.STARFORGE_FIREBASE_ANDROID_APP_ID }}"
+            test -n "${{ secrets.STARFORGE_FIREBASE_MESSAGING_SENDER_ID }}"
+          fi
+
       - name: Upload Android APK
         uses: actions/upload-artifact@v6
         with:
           name: starforge-family-android-debug
           path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload signed Android release
+        if: ${{ secrets.STARFORGE_ANDROID_KEYSTORE_B64 != '' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: starforge-family-android-release
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 14

@@ -52,6 +52,14 @@ void main() {
       'attendance',
     );
     expect(notificationRouteFromPayload({'resource': 'payment'}), 'finance');
+    expect(
+      notificationRouteFromPayload({'resource': 'assignment_due_soon'}),
+      'assignments',
+    );
+    expect(
+      notificationRouteFromPayload({'resource': 'new_message_received'}),
+      'messages',
+    );
     expect(notificationRouteFromPayload(const {}), 'notifications');
     expect(decodeNotificationPayload('messages'), {'route': 'messages'});
   });

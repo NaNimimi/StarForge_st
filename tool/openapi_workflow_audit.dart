@@ -158,6 +158,10 @@ Set<Operation> _sourceOperations(Directory sourceDirectory) {
     r"_api\s*\.\s*(get|post|put|patch|delete)\s*\(\s*'([^']+)'",
     multiLine: true,
   );
+  final optionalGetPattern = RegExp(
+    r"_optionalGet\s*\(\s*'([^']+)'",
+    multiLine: true,
+  );
   final files = sourceDirectory
       .listSync(recursive: true)
       .whereType<File>()
@@ -171,6 +175,11 @@ Set<Operation> _sourceOperations(Directory sourceDirectory) {
         method: match.group(1)!.toUpperCase(),
         path: _canonicalPath(path),
       ));
+    }
+    for (final match in optionalGetPattern.allMatches(source)) {
+      final path = match.group(1)!;
+      if (!path.startsWith('/api/v1/')) continue;
+      operations.add((method: 'GET', path: _canonicalPath(path)));
     }
   }
   return operations;

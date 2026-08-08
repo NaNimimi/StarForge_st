@@ -80,7 +80,10 @@ Future<void> _smokeRole({
     }
     final permissions = _strings(profile['permission_codes']);
     final studentId = role == 'student'
-        ? _integer(profile['id'])
+        ? _integer(profile['student_id']) ??
+              (_can(permissions, 'students:read')
+                  ? await _resolveStudentId(api, profile)
+                  : null)
         : await _probeParentHome(api);
 
     if (role == 'student') {
@@ -118,6 +121,26 @@ Future<void> _smokeRole({
       stderr.writeln('WARNING: $role logout failed after smoke checks.');
     }
   }
+}
+
+Future<int?> _resolveStudentId(
+  _ApiProbe api,
+  Map<String, Object?> profile,
+) async {
+  final rows = _rows(
+    await api.request('GET', '/api/v1/students/', query: {'page_size': 100}),
+  );
+  final userId = _integer(profile['id']);
+  final match = rows.where((row) {
+    final user = row['user'];
+    final linkedUserId =
+        _integer(row['user_id']) ??
+        _integer(row['account_id']) ??
+        (user is Map ? _integer(user['id']) : _integer(user));
+    return userId != null && linkedUserId == userId;
+  }).firstOrNull;
+  return _integer(match?['id']) ??
+      (rows.length == 1 ? _integer(rows.first['id']) : null);
 }
 
 Future<int?> _probeParentHome(_ApiProbe api) async {
