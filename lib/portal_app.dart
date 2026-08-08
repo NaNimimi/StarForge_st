@@ -8,7 +8,9 @@ import 'package:record/record.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_state.dart';
+import 'notification_service.dart';
 import 'portal_state.dart';
+import 'push_notification_service.dart';
 import 'starforge_api.dart';
 import 'theme.dart';
 
@@ -341,18 +343,18 @@ class _LoginStoryPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: const Color(0xFF101525),
+      color: const Color(0xFF1D1914),
       child: Stack(
         children: [
           const Positioned(
             right: -100,
             top: -80,
-            child: _LoginOrbit(size: 440, color: Color(0xFF5968F2)),
+            child: _LoginOrbit(size: 440, color: Color(0xFF4F6A3A)),
           ),
           const Positioned(
             left: -130,
             bottom: -170,
-            child: _LoginOrbit(size: 390, color: Color(0xFFFFC857)),
+            child: _LoginOrbit(size: 390, color: Color(0xFFBA8C2C)),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(64, 58, 56, 54),
@@ -376,7 +378,7 @@ class _LoginStoryPanel extends StatelessWidget {
                   child: Text(
                     'Darslar, natijalar, topshiriqlar va maktab bilan muloqot — o‘quvchi va oila uchun yagona raqamli makon.',
                     style: TextStyle(
-                      color: Color(0xFFB8C0D6),
+                      color: Color(0xFFC9C0AF),
                       fontSize: 16,
                       height: 1.55,
                       fontFamily: Sf.ui,
@@ -406,7 +408,7 @@ class _LoginStoryPanel extends StatelessWidget {
                 const Text(
                   'STARFORGE EDU  /  OILA PORTALI',
                   style: TextStyle(
-                    color: Color(0xFF7F8AA7),
+                    color: Color(0xFF9E927E),
                     fontSize: 11,
                     letterSpacing: 2.2,
                     fontWeight: FontWeight.w800,
@@ -436,12 +438,12 @@ class _LoginSignal extends StatelessWidget {
     child: const Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.shield_outlined, size: 14, color: Color(0xFF65D6A6)),
+        Icon(Icons.shield_outlined, size: 14, color: Color(0xFFB7D29A)),
         SizedBox(width: 8),
         Text(
           'XAVFSIZ KABINETGA KIRISH',
           style: TextStyle(
-            color: Color(0xFFD7DCEE),
+            color: Color(0xFFE4DDCE),
             fontSize: 10,
             letterSpacing: 1.25,
             fontWeight: FontWeight.w800,
@@ -468,7 +470,7 @@ class _LoginFeature extends StatelessWidget {
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 17, color: const Color(0xFFAEB6FF)),
+        Icon(icon, size: 17, color: const Color(0xFFE3BD6A)),
         const SizedBox(width: 8),
         Text(
           text,
@@ -834,6 +836,56 @@ class _PortalShell extends StatefulWidget {
 
 class _PortalShellState extends State<_PortalShell> {
   PortalSection _section = PortalSection.home;
+  StreamSubscription<Map<String, dynamic>>? _notificationTapSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _notificationTapSubscription = DeviceNotificationService
+        .instance
+        .notificationTaps
+        .listen(_openNotificationPayload);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final pending = DeviceNotificationService.instance
+          .takePendingTapPayload();
+      if (pending != null) _openNotificationPayload(pending);
+    });
+  }
+
+  void _openNotificationPayload(Map<String, dynamic> payload) {
+    if (!mounted) return;
+    final route = notificationRouteFromPayload(payload);
+    final section = switch (route) {
+      'messages' => PortalSection.messages,
+      'assignments' => PortalSection.assignments,
+      'schedule' || 'calendar' => PortalSection.schedule,
+      'attendance' => PortalSection.attendance,
+      'academics' || 'grades' || 'exams' => PortalSection.academics,
+      'content' || 'courses' || 'materials' => PortalSection.content,
+      'forms' => PortalSection.forms,
+      'achievements' => PortalSection.achievements,
+      'discipline' || 'rules' || 'penalties' => PortalSection.discipline,
+      'finance' || 'payments' => PortalSection.finance,
+      'cards' || 'wallet' => PortalSection.cards,
+      'account' => PortalSection.account,
+      'students' || 'parents' || 'identity' => PortalSection.identity,
+      _ => PortalSection.notifications,
+    };
+    final portal = PortalScope.read(context);
+    if (!_destinations(portal).any((item) => item.section == section)) {
+      setState(() => _section = PortalSection.notifications);
+      unawaited(portal.loadSection(PortalSection.notifications, force: true));
+      return;
+    }
+    setState(() => _section = section);
+    unawaited(portal.loadSection(section, force: true));
+  }
+
+  @override
+  void dispose() {
+    _notificationTapSubscription?.cancel();
+    super.dispose();
+  }
 
   List<_PortalDestination> _destinations(PortalController portal) {
     if (portal.isStudent) {
@@ -1017,25 +1069,25 @@ class _PortalShellState extends State<_PortalShell> {
     );
     final baseTheme = Theme.of(context);
     final accent = portal.isStudent
-        ? const Color(0xFF5968F2)
-        : const Color(0xFF235B62);
+        ? const Color(0xFF4F6A3A)
+        : const Color(0xFF8D5E2E);
     final accentSoft = portal.isStudent
-        ? const Color(0xFFE9EBFF)
-        : const Color(0xFFE1F0F0);
+        ? const Color(0xFFDBE5C7)
+        : const Color(0xFFF0E1BB);
     final accentInk = portal.isStudent
-        ? const Color(0xFF273192)
-        : const Color(0xFF174249);
+        ? const Color(0xFF324D22)
+        : const Color(0xFF674A0D);
     final roleScheme = baseTheme.colorScheme.copyWith(
       primary: accent,
       onPrimary: Colors.white,
       primaryContainer: accentSoft,
       onPrimaryContainer: accentInk,
       secondary: portal.isStudent
-          ? const Color(0xFF25A978)
-          : const Color(0xFFC86645),
+          ? const Color(0xFFBA8C2C)
+          : const Color(0xFF4F6A3A),
       tertiary: portal.isStudent
-          ? const Color(0xFF8B5CF6)
-          : const Color(0xFF9A5AC7),
+          ? const Color(0xFF77551B)
+          : const Color(0xFF8B6A29),
     );
     final roleTheme = baseTheme.copyWith(
       colorScheme: roleScheme,
@@ -1060,7 +1112,7 @@ class _PortalShellState extends State<_PortalShell> {
               ? null
               : Drawer(
                   width: 300,
-                  backgroundColor: const Color(0xFF101525),
+                  backgroundColor: const Color(0xFF1D1914),
                   child: SafeArea(child: drawer),
                 ),
           appBar: AppBar(
@@ -1218,7 +1270,7 @@ class _PortalNavigation extends StatelessWidget {
     final portal = PortalScope.of(context);
     final accent = Theme.of(context).colorScheme.primary;
     return Material(
-      color: const Color(0xFF101525),
+      color: const Color(0xFF1D1914),
       child: Column(
         children: [
           Padding(
@@ -1242,7 +1294,7 @@ class _PortalNavigation extends StatelessWidget {
                       Text(
                         portal.isParent ? 'OILA KABINETI' : 'O‘QUVCHI KABINETI',
                         style: const TextStyle(
-                          color: Color(0xFF7F8AA7),
+                          color: Color(0xFF9E927E),
                           fontSize: 9,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 1.8,

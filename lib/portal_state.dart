@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'push_notification_service.dart';
 import 'starforge_api.dart';
 
 enum AuthPhase { restoring, signedOut, signedIn }
@@ -162,10 +163,12 @@ final class PortalController extends ChangeNotifier {
       _assertFamilyRole();
       phase = AuthPhase.signedIn;
       notifyListeners();
+      unawaited(_bindPushSession());
       await loadSection(PortalSection.home);
     } on Object {
       await _store.clear();
       _api.accessToken = null;
+      PushNotificationService.instance.unbindAuthenticatedSession();
       phase = AuthPhase.signedOut;
       notifyListeners();
     }
@@ -185,28 +188,33 @@ final class PortalController extends ChangeNotifier {
       deviceId = deviceId.isEmpty
           ? 'family-${DateTime.now().microsecondsSinceEpoch}'
           : deviceId;
-      final result = await _api.post(
-        '/api/v1/auth/role-login/',
-        body: {
-          'username': username.trim(),
-          'password': password,
-          'device_id': deviceId,
-          'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
-        },
-      );
+      final body = <String, Object?>{
+        'username': username.trim(),
+        'password': password,
+      };
+      ApiResult result;
+      try {
+        // This is the canonical login contract. The deployed tenant currently
+        // exposes the same session flow through role-login, so only a missing
+        // route (404/405) is allowed to use the compatibility endpoint.
+        result = await _api.post('/api/v1/auth/login/', body: body);
+      } on ApiException catch (error) {
+        if (error.statusCode != 404 && error.statusCode != 405) rethrow;
+        result = await _api.post('/api/v1/auth/role-login/', body: body);
+      }
       final data = result.object;
-      final access = '${data['access'] ?? ''}'.trim();
-      role = '${data['role'] ?? ''}'.trim().toLowerCase();
+      final access = _sessionAccess(result.data);
       if (access.isEmpty) {
         throw const ApiException(
           message: 'Server sessiya kalitini qaytarmadi.',
           code: 'invalid_login_response',
         );
       }
-      _assertFamilyRole();
       _api.accessToken = access;
+      role = '${data['role'] ?? ''}'.trim().toLowerCase();
       mustChangePassword = data['must_change_password'] == true;
       await _loadProfile();
+      _assertFamilyRole();
       await _store.save(
         SessionRecord(
           baseUrl: _api.baseUrl,
@@ -218,6 +226,7 @@ final class PortalController extends ChangeNotifier {
       phase = AuthPhase.signedIn;
       authenticationBusy = false;
       notifyListeners();
+      unawaited(_bindPushSession());
       await loadSection(PortalSection.home, force: true);
       return true;
     } on FormatException catch (error) {
@@ -227,6 +236,8 @@ final class PortalController extends ChangeNotifier {
     } on Object {
       authenticationError = 'Kirish vaqtida kutilmagan xatolik yuz berdi.';
     }
+    _api.accessToken = null;
+    role = '';
     authenticationBusy = false;
     notifyListeners();
     return false;
@@ -244,6 +255,7 @@ final class PortalController extends ChangeNotifier {
   }
 
   Future<void> _expireSession() async {
+    PushNotificationService.instance.unbindAuthenticatedSession();
     await _store.clear();
     _api.accessToken = null;
     role = '';
@@ -252,6 +264,15 @@ final class PortalController extends ChangeNotifier {
     _clearData();
     phase = AuthPhase.signedOut;
     notifyListeners();
+  }
+
+  Future<void> _bindPushSession() async {
+    if (!isAuthenticated || deviceId.isEmpty) return;
+    await PushNotificationService.instance.bindAuthenticatedSession(
+      deviceId: deviceId,
+      registrar: (body) async =>
+          (await _api.post('/api/v1/users/devices/', body: body)).data,
+    );
   }
 
   void _assertFamilyRole() {
@@ -1124,6 +1145,7 @@ final class PortalController extends ChangeNotifier {
 
   @override
   void dispose() {
+    PushNotificationService.instance.unbindAuthenticatedSession();
     _api.close();
     super.dispose();
   }
@@ -1163,3 +1185,18 @@ String _value(
 
 int? _integer(Object? value) =>
     value is int ? value : int.tryParse('${value ?? ''}');
+
+String _sessionAccess(Object? value) {
+  const keys = {'access', 'access_token', 'token', 'session_key', 'key'};
+  if (value is Map) {
+    for (final key in keys) {
+      final text = value[key]?.toString().trim() ?? '';
+      if (text.isNotEmpty && text != 'null') return text;
+    }
+    for (final nestedKey in const ['session', 'data', 'credentials']) {
+      final nested = _sessionAccess(value[nestedKey]);
+      if (nested.isNotEmpty) return nested;
+    }
+  }
+  return '';
+}

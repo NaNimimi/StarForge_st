@@ -61,6 +61,84 @@ void main() {
     expect((await api.get('/api/v1/notifications/')).rows.single['id'], 1);
   });
 
+  test(
+    'login uses canonical auth endpoint before compatibility fallback',
+    () async {
+      final requestedPaths = <String>[];
+      final api = StarForgeApi(
+        baseUrl: 'https://demo.example.uz',
+        client: MockClient((request) async {
+          requestedPaths.add(request.url.path);
+          final path = request.url.path;
+          if (path.endsWith('/auth/login/')) {
+            return _ok({'access_token': 'canonical-session'});
+          }
+          if (path.endsWith('/users/me/')) {
+            expect(
+              request.headers['authorization'],
+              'Bearer canonical-session',
+            );
+            return _ok({
+              'id': 7,
+              'principal_kind': 'student',
+              'permission_codes': const <String>[],
+            });
+          }
+          if (path.endsWith('/students/me/dashboard/')) return _ok({});
+          if (path.endsWith('/students/me/report/')) return _ok({});
+          if (path.endsWith('/notifications/unread-count/')) {
+            return _ok({'count': 0});
+          }
+          return http.Response('not found', 404);
+        }),
+      );
+      final portal = PortalController(api: api, restoreSession: false);
+      addTearDown(portal.dispose);
+
+      expect(
+        await portal.login(
+          baseUrl: 'https://demo.example.uz',
+          username: 'student',
+          password: 'secret',
+        ),
+        isTrue,
+      );
+      expect(requestedPaths.first, '/api/v1/auth/login/');
+      expect(requestedPaths, isNot(contains('/api/v1/auth/role-login/')));
+    },
+  );
+
+  test('invalid canonical login never falls back to role-login', () async {
+    final requestedPaths = <String>[];
+    final api = StarForgeApi(
+      baseUrl: 'https://demo.example.uz',
+      client: MockClient((request) async {
+        requestedPaths.add(request.url.path);
+        return http.Response(
+          jsonEncode({
+            'success': false,
+            'code': 'invalid_credentials',
+            'message': 'Invalid username or password.',
+          }),
+          401,
+        );
+      }),
+    );
+    final portal = PortalController(api: api, restoreSession: false);
+    addTearDown(portal.dispose);
+
+    expect(
+      await portal.login(
+        baseUrl: 'https://demo.example.uz',
+        username: 'student',
+        password: 'wrong',
+      ),
+      isFalse,
+    );
+    expect(requestedPaths, ['/api/v1/auth/login/']);
+    expect(portal.authenticationError, 'Invalid username or password.');
+  });
+
   test('student role login hydrates profile and server dashboard', () async {
     final api = StarForgeApi(
       baseUrl: 'https://demo.example.uz',

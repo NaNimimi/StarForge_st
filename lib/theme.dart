@@ -7,33 +7,33 @@ import 'package:flutter/material.dart';
 /// archived prototype screens, while the active application consumes the
 /// colors through [ThemeData].
 class Sf {
-  static const bg = Color(0xFFF3F5F9);
-  static const surface = Color(0xFFFFFFFF);
-  static const surface2 = Color(0xFFF0F2F7);
-  static const surface3 = Color(0xFFE5E8F0);
-  static const ink = Color(0xFF111827);
-  static const ink2 = Color(0xFF30384A);
-  static const muted = Color(0xFF667085);
-  static const muted2 = Color(0xFF98A2B3);
-  static const border = Color(0xFFE3E7EF);
-  static const borderStrong = Color(0xFFCBD2E0);
-  static const primary = Color(0xFF5968F2);
-  static const primaryHover = Color(0xFF4553D8);
-  static const primarySoft = Color(0xFFE9EBFF);
-  static const primaryInk = Color(0xFF273192);
-  static const accent = Color(0xFFFFC857);
-  static const accentSoft = Color(0xFFFFF3D6);
-  static const accentInk = Color(0xFF7B5300);
-  static const success = Color(0xFF1F9D70);
-  static const successSoft = Color(0xFFDDF7ED);
-  static const warn = Color(0xFFE2922D);
-  static const warnSoft = Color(0xFFFFEED8);
-  static const danger = Color(0xFFE5484D);
-  static const dangerSoft = Color(0xFFFFE5E5);
-  static const ai = Color(0xFF8B5CF6);
-  static const aiBg1 = Color(0xFFF1EBFF);
-  static const aiBg2 = Color(0xFFE7DCFF);
-  static const aiBorder = Color(0xFFCBB9F5);
+  static const bg = Color(0xFFF1EFE6);
+  static const surface = Color(0xFFFAF8EF);
+  static const surface2 = Color(0xFFE5E4D2);
+  static const surface3 = Color(0xFFD7D5BD);
+  static const ink = Color(0xFF1A1E18);
+  static const ink2 = Color(0xFF2F352A);
+  static const muted = Color(0xFF6F7264);
+  static const muted2 = Color(0xFFA2A593);
+  static const border = Color(0xFFD9D6BD);
+  static const borderStrong = Color(0xFFB7B399);
+  static const primary = Color(0xFF4F6A3A);
+  static const primaryHover = Color(0xFF3E5A29);
+  static const primarySoft = Color(0xFFDBE5C7);
+  static const primaryInk = Color(0xFF324D22);
+  static const accent = Color(0xFFBA8C2C);
+  static const accentSoft = Color(0xFFF0E1BB);
+  static const accentInk = Color(0xFF674A0D);
+  static const success = Color(0xFF4F7B3B);
+  static const successSoft = Color(0xFFDDE9CE);
+  static const warn = Color(0xFFC68423);
+  static const warnSoft = Color(0xFFF5E2BF);
+  static const danger = Color(0xFFB33A2A);
+  static const dangerSoft = Color(0xFFF3D8D0);
+  static const ai = Color(0xFF77551B);
+  static const aiBg1 = Color(0xFFF3E9D0);
+  static const aiBg2 = Color(0xFFE9D6AA);
+  static const aiBorder = Color(0xFFC9AD70);
   static const goldUp = accentInk;
 
   static const ui = 'Manrope';
@@ -60,45 +60,45 @@ class Sf {
     final dark = brightness == Brightness.dark;
     final scheme = ColorScheme(
       brightness: brightness,
-      primary: dark ? const Color(0xFFAAB1FF) : primary,
-      onPrimary: dark ? const Color(0xFF1E256B) : Colors.white,
-      primaryContainer: dark ? const Color(0xFF30376F) : primarySoft,
-      onPrimaryContainer: dark ? const Color(0xFFE3E5FF) : primaryInk,
-      secondary: dark ? const Color(0xFFFFD477) : accent,
-      onSecondary: dark ? const Color(0xFF432F00) : const Color(0xFF332100),
-      secondaryContainer: dark ? const Color(0xFF4A3A19) : accentSoft,
-      onSecondaryContainer: dark ? const Color(0xFFFFE8AC) : accentInk,
+      primary: dark ? const Color(0xFFB7D29A) : primary,
+      onPrimary: dark ? const Color(0xFF203313) : Colors.white,
+      primaryContainer: dark ? const Color(0xFF344729) : primarySoft,
+      onPrimaryContainer: dark ? const Color(0xFFDDEFC7) : primaryInk,
+      secondary: dark ? const Color(0xFFE3BD6A) : accent,
+      onSecondary: dark ? const Color(0xFF3C2B08) : const Color(0xFF332100),
+      secondaryContainer: dark ? const Color(0xFF4B3B1E) : accentSoft,
+      onSecondaryContainer: dark ? const Color(0xFFF5DEA8) : accentInk,
       error: dark ? const Color(0xFFFFB4A8) : danger,
       onError: dark ? const Color(0xFF680007) : Colors.white,
       errorContainer: dark ? const Color(0xFF5B2520) : dangerSoft,
       onErrorContainer: dark
           ? const Color(0xFFFFDAD4)
           : const Color(0xFF5D160D),
-      surface: dark ? const Color(0xFF171A23) : surface,
-      onSurface: dark ? const Color(0xFFF3F4F8) : ink,
+      surface: dark ? const Color(0xFF1D1914) : surface,
+      onSurface: dark ? const Color(0xFFF0EBDD) : ink,
       surfaceContainerLowest: dark
-          ? const Color(0xFF0F1118)
-          : const Color(0xFFF8F9FC),
+          ? const Color(0xFF14110D)
+          : const Color(0xFFF7F5EB),
       surfaceContainerLow: dark
-          ? const Color(0xFF1D202B)
-          : const Color(0xFFF4F6FA),
-      surfaceContainer: dark ? const Color(0xFF242834) : surface2,
-      surfaceContainerHigh: dark ? const Color(0xFF2C3140) : surface3,
+          ? const Color(0xFF211D17)
+          : const Color(0xFFF3F1E7),
+      surfaceContainer: dark ? const Color(0xFF29241D) : surface2,
+      surfaceContainerHigh: dark ? const Color(0xFF332D24) : surface3,
       surfaceContainerHighest: dark
-          ? const Color(0xFF383E4E)
-          : const Color(0xFFD9DEE8),
-      onSurfaceVariant: dark ? const Color(0xFFC3C8D4) : ink2,
+          ? const Color(0xFF40382D)
+          : const Color(0xFFCECBB2),
+      onSurfaceVariant: dark ? const Color(0xFFC9C0AF) : ink2,
       outline: highContrast
-          ? (dark ? const Color(0xFFB8BECC) : const Color(0xFF7E8799))
-          : (dark ? const Color(0xFF555C6D) : borderStrong),
+          ? (dark ? const Color(0xFFD3CAB8) : const Color(0xFF777561))
+          : (dark ? const Color(0xFF6D6252) : borderStrong),
       outlineVariant: highContrast
-          ? (dark ? const Color(0xFF777F91) : borderStrong)
-          : (dark ? const Color(0xFF343947) : border),
-      shadow: const Color(0xFF101828),
+          ? (dark ? const Color(0xFF8B7E69) : borderStrong)
+          : (dark ? const Color(0xFF443C31) : border),
+      shadow: const Color(0xFF14110D),
       scrim: const Color(0x99000000),
-      inverseSurface: dark ? const Color(0xFFF3F4F8) : ink,
+      inverseSurface: dark ? const Color(0xFFF0EBDD) : ink,
       onInverseSurface: dark ? ink : Colors.white,
-      inversePrimary: dark ? primary : const Color(0xFFAAB1FF),
+      inversePrimary: dark ? primary : const Color(0xFFB7D29A),
       surfaceTint: Colors.transparent,
     );
 
@@ -107,7 +107,7 @@ class Sf {
       brightness: brightness,
       fontFamily: ui,
       colorScheme: scheme,
-      scaffoldBackgroundColor: dark ? const Color(0xFF0F1118) : bg,
+      scaffoldBackgroundColor: dark ? const Color(0xFF14110D) : bg,
       splashFactory: InkRipple.splashFactory,
       visualDensity: VisualDensity.standard,
     );

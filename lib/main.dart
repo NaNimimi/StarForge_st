@@ -4,11 +4,13 @@ import 'package:flutter/services.dart';
 import 'app_state.dart';
 import 'portal_app.dart';
 import 'portal_state.dart';
+import 'push_notification_service.dart';
 import 'redesign_app.dart';
 import 'theme.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await PushNotificationService.instance.initialize();
   runApp(const StarForgeApp(connected: true));
 }
 

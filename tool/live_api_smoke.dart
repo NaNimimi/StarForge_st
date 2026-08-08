@@ -43,22 +43,29 @@ Future<void> _smokeRole({
   required String password,
 }) async {
   final anonymous = _ApiProbe(client: client, baseUrl: baseUrl);
-  final login = _map(
-    await anonymous.request(
+  final loginBody = <String, Object?>{
+    'username': username,
+    'password': password,
+  };
+  Object? loginData;
+  try {
+    loginData = await anonymous.request(
+      'POST',
+      '/api/v1/auth/login/',
+      body: loginBody,
+    );
+  } on _ProbeException catch (error) {
+    if (error.statusCode != 404 && error.statusCode != 405) rethrow;
+    loginData = await anonymous.request(
       'POST',
       '/api/v1/auth/role-login/',
-      body: {
-        'username': username,
-        'password': password,
-        'device_id': 'github-actions-$role',
-        'platform': 'web',
-      },
-    ),
-    '$role login',
-  );
-  final token = '${login['access'] ?? ''}'.trim();
+      body: loginBody,
+    );
+  }
+  final login = _map(loginData, '$role login');
+  final token = _sessionAccess(login);
   final loginRole = '${login['role'] ?? ''}'.trim().toLowerCase();
-  if (token.isEmpty || loginRole != role) {
+  if (token.isEmpty || (loginRole.isNotEmpty && loginRole != role)) {
     throw StateError('$role login returned an invalid role or empty session.');
   }
 
@@ -272,8 +279,10 @@ final class _ApiProbe {
         request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $value');
       }
       if (body != null) {
+        final encodedBody = utf8.encode(jsonEncode(body));
         request.headers.contentType = ContentType.json;
-        request.write(jsonEncode(body));
+        request.contentLength = encodedBody.length;
+        request.add(encodedBody);
       }
       final response = await request.close().timeout(
         const Duration(seconds: 30),
@@ -297,12 +306,25 @@ final class _ApiProbe {
           response.statusCode >= 300 ||
           envelope['success'] == false) {
         final message = '${envelope['message'] ?? 'request failed'}';
-        throw HttpException('$method $path: ${response.statusCode} $message');
+        throw _ProbeException(
+          statusCode: response.statusCode,
+          message: '$method $path: ${response.statusCode} $message',
+        );
       }
       return envelope.containsKey('success') ? envelope['data'] : decoded;
     }
     throw StateError('Unreachable retry state for $method $path.');
   }
+}
+
+final class _ProbeException implements Exception {
+  const _ProbeException({required this.statusCode, required this.message});
+
+  final int statusCode;
+  final String message;
+
+  @override
+  String toString() => message;
 }
 
 String _required(Map<String, String> environment, String key) {
@@ -347,3 +369,22 @@ int? _integer(Object? value) => switch (value) {
   String text => int.tryParse(text),
   _ => null,
 };
+
+String _sessionAccess(Object? value) {
+  if (value is! Map) return '';
+  for (final key in const [
+    'access',
+    'access_token',
+    'token',
+    'session_key',
+    'key',
+  ]) {
+    final text = value[key]?.toString().trim() ?? '';
+    if (text.isNotEmpty && text != 'null') return text;
+  }
+  for (final key in const ['session', 'data', 'credentials']) {
+    final nested = _sessionAccess(value[key]);
+    if (nested.isNotEmpty) return nested;
+  }
+  return '';
+}

@@ -6,8 +6,9 @@ role-aware access to schedules, attendance, assignments, academic results,
 learning content, messaging, notifications, family information, and school
 services.
 
-> The primary validated platform is Web. Android platform sources remain in the
-> repository, but APK files and the `build/` directory are not committed to Git.
+> Web and Android are validated in GitHub Actions. The iOS release pipeline is
+> defined for Codemagic because signed Apple builds require macOS and protected
+> Apple Developer credentials. Generated binaries and `build/` are not committed.
 
 ## Table of contents
 
@@ -18,6 +19,8 @@ services.
 - [Requirements](#requirements)
 - [Quick Web start](#quick-web-start)
 - [API configuration](#api-configuration)
+- [Firebase push configuration](#firebase-push-configuration)
+- [Codemagic iOS release](#codemagic-ios-release)
 - [Testing](#testing)
 - [Continuous integration](#continuous-integration)
 - [Production build](#production-build)
@@ -29,7 +32,8 @@ services.
 
 ### Core application
 
-- API-based `role-login` authentication and session restoration;
+- API-based `/api/v1/auth/login/` authentication with a deployed-tenant
+  compatibility fallback and secure session restoration;
 - mandatory temporary-password replacement;
 - responsive navigation for desktop, tablet, and mobile layouts;
 - separate student and parent portals;
@@ -73,6 +77,7 @@ services.
 - achievements;
 - rules, acknowledgements, and disciplinary records;
 - notifications and delivery preferences;
+- native Firebase push notifications with sound and background delivery;
 - student card and wallet;
 - read-only family finance summary;
 - active device list and device revocation.
@@ -135,6 +140,8 @@ Design principles:
 | `file_picker` | Assignment and message file selection |
 | `record` | Voice-message recording |
 | `url_launcher` | Downloads and external links |
+| Firebase Messaging | Native Android/iOS push delivery |
+| Local Notifications | Foreground and data-only alerts with sound |
 | Manrope | Primary interface typeface |
 | Instrument Serif | Editorial display headings |
 | JetBrains Mono | Dates, codes, and numeric labels |
@@ -146,6 +153,8 @@ Design principles:
 - a reachable StarForge EDU API compatible with the contracts used by this
   frontend;
 - browser access to the configured API hostname.
+- Java 17 and an Android SDK for Android builds;
+- a Firebase project configuration for real device push delivery.
 
 Check the local Flutter installation:
 
@@ -217,6 +226,77 @@ The API client automatically:
 - applies request timeouts;
 - clears the local session after `401 Unauthorized`.
 
+Authentication always starts with `/api/v1/auth/login/`. A fallback to
+`/api/v1/auth/role-login/` is used only when the canonical route is absent
+(`404` or `405`), never after an invalid password or another authentication
+error.
+
+## Firebase push configuration
+
+The Android and iOS applications are ready for Firebase Cloud Messaging. Push tokens are
+registered after login through `/api/v1/users/devices/`. The notification
+channel is `starforge_messages`, matching the backend sender, with maximum
+importance, vibration, and sound. Notification messages are displayed by the
+operating system while the app is backgrounded; foreground and data-only
+messages are displayed through the local notification bridge.
+
+Use either configuration method:
+
+1. Download the Android app configuration from Firebase and place it at
+   `android/app/google-services.json` (the file is ignored by Git).
+2. Supply the configuration through `--dart-define`:
+
+```bash
+flutter build apk --release \
+  --dart-define=API_BASE_URL=https://center.example.com \
+  --dart-define=STARFORGE_FIREBASE_ANDROID_API_KEY=... \
+  --dart-define=STARFORGE_FIREBASE_ANDROID_APP_ID=... \
+  --dart-define=STARFORGE_FIREBASE_MESSAGING_SENDER_ID=... \
+  --dart-define=STARFORGE_FIREBASE_PROJECT_ID=... \
+  --dart-define=STARFORGE_FIREBASE_STORAGE_BUCKET=...
+```
+
+If neither configuration is present, the application still starts and its API
+notification inbox remains available, but native push delivery is disabled.
+The backend must also have valid Firebase service-account credentials for the
+same Firebase project. Never commit `google-services.json`, service-account
+keys, API sessions, or user passwords.
+
+### Native platform requirements
+
+- Android declares `POST_NOTIFICATIONS` and `VIBRATE`, creates the
+  `starforge_messages` high-priority channel, and requests notification
+  permission after a user signs in.
+- iOS declares the Push Notifications entitlement, enables the
+  `remote-notification` background mode, requests alert/badge/sound permission,
+  and registers the APNs-backed FCM token after sign-in.
+- The backend sender and client application must use the same Firebase project.
+  The Firebase project must contain an APNs authentication key for iOS.
+
+## Codemagic iOS release
+
+The repository root contains `codemagic.yaml`. Its `ios-release` workflow
+formats, audits, analyzes, and tests the frontend, restores Firebase securely,
+fetches App Store signing files, and produces a signed IPA for bundle identifier
+`com.starforge.starforgeStudent`.
+
+Create these encrypted variable groups in Codemagic before the first build:
+
+| Group | Variable | Value |
+| --- | --- | --- |
+| `starforge_firebase_ios` | `IOS_FIREBASE_SECRET` | Complete contents of `GoogleService-Info.plist` |
+| `appstore_credentials` | `APP_STORE_CONNECT_KEY_IDENTIFIER` | App Store Connect API key ID |
+| `appstore_credentials` | `APP_STORE_CONNECT_ISSUER_ID` | App Store Connect issuer ID |
+| `appstore_credentials` | `APP_STORE_CONNECT_PRIVATE_KEY` | Complete `.p8` private key contents |
+| `appstore_credentials` | `CERTIFICATE_PRIVATE_KEY` | Private key for the Apple distribution certificate |
+
+In Codemagic, mark every value as **Secret**. The workflow validates the plist,
+extracts its Firebase identifiers without printing them, saves them in the
+temporary build environment, and supplies them to Flutter through
+`--dart-define`. Apple Developer Portal must have the App ID and Push
+Notifications capability enabled for this bundle identifier before the first
+signed build.
+
 ## Testing
 
 Run these checks before a pull request or push:
@@ -254,8 +334,8 @@ The repository includes two GitHub Actions workflows:
 - `Flutter CI` runs on every push to `main`, every pull request, and manual
   dispatch. It verifies formatting, audits every frontend API call against the
   committed OpenAPI contract, runs static analysis and tests with coverage,
-  builds the Web release, and validates the merged Android manifests. It does
-  not build or publish an APK.
+  builds the Web release, builds a debug Android APK, validates the merged
+  Android permissions, and uploads Web, APK, and coverage artifacts.
 - `Live Student and Parent API Smoke` is a manual, read-only integration check.
   It signs in through both roles, validates each `/users/me/` projection, checks
   the student dashboard/report and the parent's linked-child report, then probes
@@ -281,6 +361,17 @@ repository variable is optional and overrides the default API address:
 The parent smoke account must have at least one active linked child. Credentials
 and opaque session keys are never printed or committed.
 
+For Firebase-enabled CI builds, configure these optional repository secrets:
+
+| Secret | Purpose |
+| --- | --- |
+| `STARFORGE_GOOGLE_SERVICES_JSON_B64` | Base64-encoded Android Firebase config |
+| `STARFORGE_FIREBASE_ANDROID_API_KEY` | Android Firebase API key for dart-define setup |
+| `STARFORGE_FIREBASE_ANDROID_APP_ID` | Android Firebase application ID |
+| `STARFORGE_FIREBASE_MESSAGING_SENDER_ID` | FCM sender number |
+| `STARFORGE_FIREBASE_PROJECT_ID` | Firebase project ID |
+| `STARFORGE_FIREBASE_STORAGE_BUCKET` | Optional Firebase storage bucket |
+
 ## Production build
 
 Build an optimized Web release:
@@ -295,6 +386,17 @@ The generated site is written to:
 ```text
 build/web/
 ```
+
+Build an Android APK:
+
+```bash
+flutter build apk --release \
+  --dart-define=API_BASE_URL=https://center.example.com
+```
+
+Unsigned release builds require protected Android signing configuration. For a
+local functional check that does not publish an artifact, use
+`flutter build apk --debug`.
 
 Serve the release locally for a smoke test:
 
@@ -321,6 +423,8 @@ lib/
 ├── main.dart                    connected application entry point
 ├── portal_app.dart              sign-in, responsive shell, and navigation
 ├── portal_state.dart            session, permissions, and domain loading
+├── push_notification_service.dart Firebase Messaging and device registration
+├── notification_service.dart    native notification channel and sound
 ├── starforge_api.dart           HTTP client and secure session storage
 ├── portal_pages.dart            learning and service pages
 ├── portal_identity_pages.dart   separate student and family profiles
