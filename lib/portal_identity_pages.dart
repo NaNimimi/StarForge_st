@@ -1,5 +1,12 @@
 part of 'portal_app.dart';
 
+String _identityText(BuildContext context, String uz, String ru, String en) =>
+    switch (PortalScope.of(context).preferences.language) {
+      PortalLanguage.uz => uz,
+      PortalLanguage.ru => ru,
+      PortalLanguage.en => en,
+    };
+
 class _IdentityPortalPage extends StatelessWidget {
   const _IdentityPortalPage();
 
@@ -7,11 +14,713 @@ class _IdentityPortalPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final portal = PortalScope.of(context);
     return portal.isStudent
-        ? _StudentIdentityPage(portal: portal)
-        : _ParentFamilyPage(portal: portal);
+        ? _ModernStudentProfilePage(portal: portal)
+        : _ModernParentProfilePage(portal: portal);
   }
 }
 
+class _ModernStudentProfilePage extends StatelessWidget {
+  const _ModernStudentProfilePage({required this.portal});
+
+  final PortalController portal;
+
+  @override
+  Widget build(BuildContext context) {
+    String t(String uz, String ru, String en) =>
+        _identityText(context, uz, ru, en);
+    final profile = portal.studentProfile;
+    if (profile.isEmpty) {
+      return _PortalPage(
+        title: t('Mening profilim', 'Мой профиль', 'My profile'),
+        subtitle: t(
+          'Shaxsiy va o‘quv ma’lumotlaringiz.',
+          'Ваши личные и учебные данные.',
+          'Your personal and learning information.',
+        ),
+        section: PortalSection.identity,
+        children: [
+          _EmptyState(
+            icon: Icons.person_search_outlined,
+            title: t(
+              'Profil ma’lumotlari topilmadi',
+              'Данные профиля не найдены',
+              'Profile information is unavailable',
+            ),
+            message: t(
+              'Ma’lumotlar markaz tomonidan qo‘shilgach, ular shu yerda ko‘rinadi.',
+              'Информация появится здесь после добавления учебным центром.',
+              'Your information will appear here after the learning center adds it.',
+            ),
+          ),
+        ],
+      );
+    }
+    return _PortalPage(
+      title: t('Mening profilim', 'Мой профиль', 'My profile'),
+      subtitle: t(
+        'Kerakli shaxsiy va o‘quv ma’lumotlari — ortiqcha bloklarsiz.',
+        'Нужные личные и учебные данные — без лишних блоков.',
+        'The personal and learning details you need, without clutter.',
+      ),
+      section: PortalSection.identity,
+      children: [
+        _ModernProfileHeader(
+          name: valueText(profile, const [
+            'full_name',
+          ], fallback: portal.displayName),
+          role: t('O‘quvchi', 'Ученик', 'Student'),
+          detail: valueText(
+            profile,
+            const ['current_cohort_name', 'academic_level'],
+            fallback: t(
+              'Guruh hali biriktirilmagan',
+              'Группа ещё не назначена',
+              'No group assigned yet',
+            ),
+          ),
+          status: _identityStatusLabel(context, '${profile['status'] ?? ''}'),
+          blocked: profile['is_blocked'] == true,
+        ),
+        const SizedBox(height: 16),
+        _ModernProfileSectionHeader(
+          title: t(
+            'Shaxsiy ma’lumotlar',
+            'Личные данные',
+            'Personal information',
+          ),
+          onEdit: () => _openProfileEditor(context, portal),
+        ),
+        const SizedBox(height: 9),
+        _ModernProfileDetails(
+          fields: [
+            _IdentityField(
+              Icons.phone_iphone_rounded,
+              t('Telefon', 'Телефон', 'Phone'),
+              valueText(profile, const ['phone'], fallback: ''),
+            ),
+            _IdentityField(
+              Icons.alternate_email_rounded,
+              t('Email', 'Email', 'Email'),
+              valueText(profile, const ['email'], fallback: ''),
+            ),
+            _IdentityField(
+              Icons.cake_outlined,
+              t('Tug‘ilgan sana', 'Дата рождения', 'Date of birth'),
+              _dateLabel(profile['birthdate']),
+            ),
+            _IdentityField(
+              Icons.location_on_outlined,
+              t('Hudud', 'Регион', 'Region'),
+              valueText(profile, const ['location'], fallback: ''),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _ModernProfileSectionHeader(title: t('Ta’lim', 'Обучение', 'Learning')),
+        const SizedBox(height: 9),
+        _ModernProfileDetails(
+          fields: [
+            _IdentityField(
+              Icons.tag_rounded,
+              t('O‘quvchi ID', 'ID ученика', 'Student ID'),
+              valueText(profile, const ['student_id'], fallback: ''),
+            ),
+            _IdentityField(
+              Icons.groups_2_outlined,
+              t('Guruh', 'Группа', 'Group'),
+              valueText(
+                profile,
+                const ['current_cohort_name'],
+                fallback: _referenceLabel(context, profile['current_cohort']),
+              ),
+            ),
+            _IdentityField(
+              Icons.auto_graph_rounded,
+              t('Daraja', 'Уровень', 'Level'),
+              valueText(profile, const ['academic_level'], fallback: ''),
+            ),
+            _IdentityField(
+              Icons.event_available_outlined,
+              t('Qabul sanasi', 'Дата зачисления', 'Enrollment date'),
+              _dateLabel(profile['enrollment_date']),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _ModernProfileNavigation(
+          icon: Icons.history_rounded,
+          title: t('O‘qish tarixi', 'История обучения', 'Learning history'),
+          subtitle: t(
+            'Status o‘zgarishlari va markaz izohlari',
+            'Изменения статуса и комментарии центра',
+            'Status changes and center notes',
+          ),
+          onTap: () => _openProfileHistory(context, portal),
+        ),
+        const SizedBox(height: 9),
+        _ModernProfileNavigation(
+          icon: Icons.tune_rounded,
+          title: t(
+            'Sozlamalar va maxfiylik',
+            'Настройки и конфиденциальность',
+            'Settings and privacy',
+          ),
+          subtitle: t(
+            'Til, xavfsizlik, qurilmalar va akkaunt',
+            'Язык, безопасность, устройства и аккаунт',
+            'Language, security, devices, and account',
+          ),
+          onTap: () =>
+              _PortalNavigationScope.go(context, PortalSection.account),
+        ),
+      ],
+    );
+  }
+}
+
+class _ModernParentProfilePage extends StatelessWidget {
+  const _ModernParentProfilePage({required this.portal});
+
+  final PortalController portal;
+
+  @override
+  Widget build(BuildContext context) {
+    String t(String uz, String ru, String en) =>
+        _identityText(context, uz, ru, en);
+    final parent = portal.parentProfile;
+    final child = portal.studentProfile;
+    final selectedId = portal.selectedStudentId;
+    final guardians = _forSelectedChild(portal.guardians, selectedId);
+    final pickups = _forSelectedChild(
+      portal.pickups,
+      selectedId,
+    ).where((row) => row['is_active'] != false).toList();
+    return _PortalPage(
+      title: t('Oila profili', 'Профиль семьи', 'Family profile'),
+      subtitle: t(
+        'Siz va tanlangan farzand uchun kerakli ma’lumotlar.',
+        'Нужная информация о вас и выбранном ребёнке.',
+        'Essential information for you and your selected child.',
+      ),
+      section: PortalSection.identity,
+      children: [
+        if (parent.isEmpty)
+          _EmptyState(
+            icon: Icons.family_restroom_outlined,
+            title: t(
+              'Ota-ona profili topilmadi',
+              'Профиль родителя не найден',
+              'Parent profile is unavailable',
+            ),
+            message: t(
+              'Markaz ma’lumotlarni tasdiqlagach oila profili shu yerda ko‘rinadi.',
+              'Семейный профиль появится после подтверждения данных центром.',
+              'The family profile will appear after the center verifies the data.',
+            ),
+          )
+        else
+          _ModernProfileHeader(
+            name: valueText(parent, const [
+              'full_name',
+            ], fallback: portal.displayName),
+            role: t('Ota-ona', 'Родитель', 'Parent'),
+            detail: valueText(
+              parent,
+              const ['phone', 'email'],
+              fallback: t(
+                'Aloqa kiritilmagan',
+                'Контакт не указан',
+                'No contact provided',
+              ),
+            ),
+            status: t('Oila akkaunti', 'Семейный аккаунт', 'Family account'),
+          ),
+        if (portal.children.length > 1) ...[
+          const SizedBox(height: 14),
+          _ChildSwitcher(
+            children: portal.children,
+            selectedId: selectedId,
+            onSelected: portal.selectChild,
+          ),
+        ],
+        const SizedBox(height: 18),
+        _ModernProfileSectionHeader(
+          title: t('Tanlangan farzand', 'Выбранный ребёнок', 'Selected child'),
+        ),
+        const SizedBox(height: 9),
+        if (child.isEmpty)
+          _EmptyState(
+            icon: Icons.person_search_outlined,
+            title: t(
+              'Farzand profili topilmadi',
+              'Профиль ребёнка не найден',
+              'Child profile is unavailable',
+            ),
+            message: t(
+              'Markaz bog‘lanishni tasdiqlagach, farzand ma’lumotlari shu yerda ko‘rinadi.',
+              'Данные появятся после подтверждения связи учебным центром.',
+              'Information will appear after the learning center confirms the link.',
+            ),
+          )
+        else
+          _ModernProfileDetails(
+            fields: [
+              _IdentityField(
+                Icons.person_outline_rounded,
+                t('Ism', 'Имя', 'Name'),
+                valueText(
+                  child,
+                  const ['full_name'],
+                  fallback:
+                      '${valueText(child, const ['first_name'], fallback: '')} ${valueText(child, const ['last_name'], fallback: '')}'
+                          .trim(),
+                ),
+              ),
+              _IdentityField(
+                Icons.tag_rounded,
+                t('O‘quvchi ID', 'ID ученика', 'Student ID'),
+                valueText(child, const ['student_id'], fallback: ''),
+              ),
+              _IdentityField(
+                Icons.groups_2_outlined,
+                t('Guruh', 'Группа', 'Group'),
+                valueText(child, const [
+                  'current_cohort_name',
+                ], fallback: _referenceLabel(context, child['current_cohort'])),
+              ),
+              _IdentityField(
+                Icons.auto_graph_rounded,
+                t('Daraja', 'Уровень', 'Level'),
+                valueText(child, const ['academic_level'], fallback: ''),
+              ),
+            ],
+          ),
+        const SizedBox(height: 18),
+        _ModernProfileSectionHeader(
+          title: t('Mening ma’lumotlarim', 'Мои данные', 'My information'),
+          onEdit: parent.isEmpty
+              ? null
+              : () => _openProfileEditor(context, portal),
+        ),
+        const SizedBox(height: 9),
+        _ModernProfileDetails(
+          fields: [
+            _IdentityField(
+              Icons.phone_iphone_rounded,
+              t('Telefon', 'Телефон', 'Phone'),
+              valueText(parent, const ['phone'], fallback: ''),
+            ),
+            _IdentityField(
+              Icons.alternate_email_rounded,
+              t('Email', 'Email', 'Email'),
+              valueText(parent, const ['email'], fallback: ''),
+            ),
+            _IdentityField(
+              Icons.work_outline_rounded,
+              t('Ish joyi', 'Место работы', 'Workplace'),
+              valueText(parent, const ['workplace'], fallback: ''),
+            ),
+            _IdentityField(
+              Icons.badge_outlined,
+              t('Hujjat', 'Документ', 'Document'),
+              valueText(parent, const [
+                'document_number',
+                'passport_number',
+              ], fallback: ''),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _ModernProfileSectionHeader(
+          title: t(
+            'Vakillar va olib ketish',
+            'Представители и получение',
+            'Guardians and pickup',
+          ),
+        ),
+        const SizedBox(height: 9),
+        if (guardians.isEmpty && pickups.isEmpty)
+          _EmptyState(
+            icon: Icons.verified_user_outlined,
+            title: t(
+              'Vakillar kiritilmagan',
+              'Представители не указаны',
+              'No guardians added',
+            ),
+            message: t(
+              'Rasmiy vakil yoki olib ketish ruxsati markaz tomonidan qo‘shilganda shu yerda ko‘rinadi.',
+              'Официальные представители и разрешения появятся здесь после добавления центром.',
+              'Official guardians and pickup permissions will appear here after the center adds them.',
+            ),
+          )
+        else
+          _SectionCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                for (final guardian in guardians)
+                  ListTile(
+                    leading: const Icon(Icons.verified_user_outlined),
+                    title: Text(
+                      valueText(
+                        guardian,
+                        const ['parent_name', 'full_name'],
+                        fallback: t(
+                          'Rasmiy vakil',
+                          'Официальный представитель',
+                          'Official guardian',
+                        ),
+                      ),
+                    ),
+                    subtitle: Text(
+                      valueText(
+                        guardian,
+                        const ['relationship', 'relation'],
+                        fallback: t(
+                          'Qarindoshlik ko‘rsatilmagan',
+                          'Родство не указано',
+                          'Relationship not provided',
+                        ),
+                      ),
+                    ),
+                  ),
+                for (final pickup in pickups)
+                  ListTile(
+                    leading: const Icon(Icons.directions_walk_rounded),
+                    title: Text(
+                      valueText(
+                        pickup,
+                        const ['full_name', 'name'],
+                        fallback: t(
+                          'Olib ketish ruxsati',
+                          'Разрешение на получение',
+                          'Pickup permission',
+                        ),
+                      ),
+                    ),
+                    subtitle: Text(
+                      valueText(
+                        pickup,
+                        const ['phone', 'relationship'],
+                        fallback: t(
+                          'Faol ruxsat',
+                          'Активное разрешение',
+                          'Active permission',
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 18),
+        _ModernProfileNavigation(
+          icon: Icons.history_rounded,
+          title: t('Farzand tarixi', 'История ребёнка', 'Child history'),
+          subtitle: t(
+            'Status va o‘quv yo‘li',
+            'Статус и учебный путь',
+            'Status and learning journey',
+          ),
+          onTap: () => _openProfileHistory(context, portal),
+        ),
+        const SizedBox(height: 9),
+        _ModernProfileNavigation(
+          icon: Icons.tune_rounded,
+          title: t(
+            'Sozlamalar va maxfiylik',
+            'Настройки и конфиденциальность',
+            'Settings and privacy',
+          ),
+          subtitle: t(
+            'Til, xavfsizlik, qurilmalar va akkaunt',
+            'Язык, безопасность, устройства и аккаунт',
+            'Language, security, devices, and account',
+          ),
+          onTap: () =>
+              _PortalNavigationScope.go(context, PortalSection.account),
+        ),
+      ],
+    );
+  }
+}
+
+class _ModernProfileHeader extends StatelessWidget {
+  const _ModernProfileHeader({
+    required this.name,
+    required this.role,
+    required this.detail,
+    required this.status,
+    this.blocked = false,
+  });
+
+  final String name;
+  final String role;
+  final String detail;
+  final String status;
+  final bool blocked;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [colors.primary, colors.secondary],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  role.toUpperCase(),
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 10,
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(color: Colors.white),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  detail,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white70, height: 1.35),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Icon(
+            blocked ? Icons.lock_outline_rounded : Icons.verified_rounded,
+            color: blocked ? colors.errorContainer : Colors.white,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ModernProfileSectionHeader extends StatelessWidget {
+  const _ModernProfileSectionHeader({required this.title, this.onEdit});
+
+  final String title;
+  final VoidCallback? onEdit;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+      ),
+      if (onEdit != null)
+        TextButton.icon(
+          onPressed: onEdit,
+          icon: const Icon(Icons.edit_outlined, size: 17),
+          label: Text(_identityText(context, 'Tahrirlash', 'Изменить', 'Edit')),
+        ),
+    ],
+  );
+}
+
+class _ModernProfileDetails extends StatelessWidget {
+  const _ModernProfileDetails({required this.fields});
+
+  final List<_IdentityField> fields;
+
+  @override
+  Widget build(BuildContext context) => _SectionCard(
+    padding: EdgeInsets.zero,
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 700 ? 2 : 1;
+        return Wrap(
+          children: [
+            for (final field in fields)
+              SizedBox(
+                width: constraints.maxWidth / columns,
+                child: ListTile(
+                  leading: Icon(
+                    field.icon,
+                    size: 20,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  title: Text(
+                    field.label,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  subtitle: Text(
+                    _filled(field.value)
+                        ? field.value
+                        : _identityText(
+                            context,
+                            'Kiritilmagan',
+                            'Не указано',
+                            'Not provided',
+                          ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+class _ModernProfileNavigation extends StatelessWidget {
+  const _ModernProfileNavigation({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => _SectionCard(
+    padding: EdgeInsets.zero,
+    child: ListTile(
+      onTap: onTap,
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.primaryContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: Theme.of(context).colorScheme.primary),
+      ),
+      title: Text(title),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.chevron_right_rounded),
+    ),
+  );
+}
+
+void _openProfileEditor(BuildContext context, PortalController portal) {
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) =>
+          PortalScope(controller: portal, child: const _ProfileEditScreen()),
+    ),
+  );
+}
+
+void _openProfileHistory(BuildContext context, PortalController portal) {
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) =>
+          PortalScope(controller: portal, child: const _ProfileHistoryScreen()),
+    ),
+  );
+}
+
+class _ProfileHistoryScreen extends StatelessWidget {
+  const _ProfileHistoryScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    final portal = PortalScope.of(context);
+    final events = portal.studentEvents;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          _identityText(
+            context,
+            'O‘qish tarixi',
+            'История обучения',
+            'Learning history',
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: events.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: _EmptyState(
+                      icon: Icons.history_toggle_off_rounded,
+                      title: _identityText(
+                        context,
+                        'Tarix hali bo‘sh',
+                        'История пока пуста',
+                        'History is empty',
+                      ),
+                      message: _identityText(
+                        context,
+                        'Status o‘zgarganda sana va markaz izohi shu sahifada ko‘rinadi.',
+                        'После изменения статуса здесь появятся дата и комментарий центра.',
+                        'Status changes, dates, and center notes will appear on this page.',
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: events.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final event = events[index];
+                      return _SectionCard(
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.route_rounded),
+                          title: Text(
+                            valueText(
+                              event,
+                              const ['title', 'status', 'event_type'],
+                              fallback: _identityText(
+                                context,
+                                'Status yangilandi',
+                                'Статус обновлён',
+                                'Status updated',
+                              ),
+                            ),
+                          ),
+                          subtitle: Text(
+                            '${_dateLabel(event['created_at'] ?? event['occurred_at'], time: true)}\n${valueText(event, const ['note', 'comment', 'reason'], fallback: _identityText(context, 'Markaz izohi kiritilmagan.', 'Комментарий центра не указан.', 'No center note was provided.'))}',
+                          ),
+                          isThreeLine: true,
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Retained for legacy visual fixtures while the connected portal uses the
+// streamlined profile above.
+// ignore: unused_element
 class _StudentIdentityPage extends StatelessWidget {
   const _StudentIdentityPage({required this.portal});
 
@@ -19,31 +728,43 @@ class _StudentIdentityPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    String t(String uz, String ru, String en) =>
+        _identityText(context, uz, ru, en);
     final profile = portal.studentProfile;
     final stats = portal.studentStats;
     final profileProgress = _studentProfileCompleteness(profile);
-    final withCohort = valueInt(stats['with_cohort']) ?? 0;
     final total = valueInt(stats['total']) ?? 0;
+    final statusStats = _mapEntries(context, stats['by_status']);
+    final branchStats = _mapEntries(context, stats['by_branch']);
     final activeReasons = portal.enrollmentReasons
         .where((item) => item['is_active'] != false)
         .toList();
     final birthdays = portal.birthdays;
-    final statusStats = _mapEntries(stats['by_status']);
-    final branchStats = _mapEntries(stats['by_branch']);
     final studentBlue = Theme.of(context).colorScheme.primary;
     final studentCyan = Theme.of(context).colorScheme.secondary;
 
     if (profile.isEmpty) {
       return _PortalPage(
-        title: 'Mening profilim',
-        subtitle: 'Shaxsiy o‘quv pasportingiz va markazdagi yo‘lingiz.',
+        title: t('Mening profilim', 'Мой профиль', 'My profile'),
+        subtitle: t(
+          'Shaxsiy o‘quv pasportingiz va markazdagi yo‘lingiz.',
+          'Ваш личный учебный паспорт и путь в центре.',
+          'Your personal learning passport and journey at the center.',
+        ),
         section: PortalSection.identity,
         children: [
           _IdentityEmptyPanel(
             icon: Icons.badge_outlined,
-            title: 'Profil ma’lumotlari yuklanmadi',
-            message:
-                'O‘quvchi profili serverda mavjud bo‘lgach, shaxsiy va akademik ma’lumotlar shu yerda ko‘rinadi.',
+            title: t(
+              'Profil ma’lumotlari yuklanmadi',
+              'Данные профиля не загружены',
+              'Profile data was not loaded',
+            ),
+            message: t(
+              'O‘quvchi profili serverda mavjud bo‘lgach, shaxsiy va akademik ma’lumotlar shu yerda ko‘rinadi.',
+              'Личные и учебные данные появятся здесь, когда профиль ученика будет доступен на сервере.',
+              'Personal and academic information will appear here when the student profile is available on the server.',
+            ),
             accent: studentBlue,
           ),
         ],
@@ -51,10 +772,14 @@ class _StudentIdentityPage extends StatelessWidget {
     }
 
     return _PortalPage(
-      title: 'Mening profilim',
-      subtitle:
-          'Shaxsiy o‘quv pasportingiz, guruh holati va markazdagi yo‘lingiz.',
+      title: t('Mening profilim', 'Мой профиль', 'My profile'),
+      subtitle: t(
+        'Shaxsiy o‘quv pasportingiz, guruh holati va markazdagi yo‘lingiz.',
+        'Ваш учебный паспорт, статус группы и путь в центре.',
+        'Your learning passport, group status, and journey at the center.',
+      ),
       section: PortalSection.identity,
+      trailing: _ProfileEditAction(portal: portal),
       children: [
         _StudentPassportHero(
           profile: profile,
@@ -66,55 +791,107 @@ class _StudentIdentityPage extends StatelessWidget {
           items: [
             _IdentityMetric(
               icon: Icons.data_usage_rounded,
-              label: 'Profil tayyorligi',
+              label: t(
+                'Profil tayyorligi',
+                'Готовность профиля',
+                'Profile readiness',
+              ),
               value: '${(profileProgress * 100).round()}%',
-              detail: 'Asosiy ma’lumotlar to‘liqligi',
+              detail: t(
+                'Asosiy ma’lumotlar to‘liqligi',
+                'Заполненность основных данных',
+                'Core information completeness',
+              ),
               accent: studentBlue,
               progress: profileProgress,
               onTap: () => _showJsonDetail(
                 context,
-                title: 'Profil to‘liqligi',
+                title: t(
+                  'Profil to‘liqligi',
+                  'Заполненность профиля',
+                  'Profile completeness',
+                ),
                 fields: {
-                  'To‘ldirilgan': '${(profileProgress * 100).round()}%',
-                  'Telefon': _availability(profile['phone']),
-                  'Email': _availability(profile['email']),
-                  'Manzil': _availability(profile['location']),
-                  'Guruh': _availability(profile['current_cohort']),
+                  t('To‘ldirilgan', 'Заполнено', 'Completed'):
+                      '${(profileProgress * 100).round()}%',
+                  t('Telefon', 'Телефон', 'Phone'): _availability(
+                    context,
+                    profile['phone'],
+                  ),
+                  t('Email', 'Email', 'Email'): _availability(
+                    context,
+                    profile['email'],
+                  ),
+                  t('Manzil', 'Адрес', 'Address'): _availability(
+                    context,
+                    profile['location'],
+                  ),
+                  t('Guruh', 'Группа', 'Group'): _availability(
+                    context,
+                    profile['current_cohort'],
+                  ),
                 },
               ),
             ),
             _IdentityMetric(
               icon: Icons.hub_outlined,
-              label: 'Guruh holati',
+              label: t('Guruh holati', 'Статус группы', 'Group status'),
               value: profile['current_cohort'] == null
-                  ? 'Kutilmoqda'
-                  : 'Ulangan',
+                  ? t('Kutilmoqda', 'Ожидается', 'Pending')
+                  : t('Ulangan', 'Подключена', 'Connected'),
               detail: profile['current_cohort'] == null
-                  ? 'Joriy guruh biriktirilmagan'
-                  : 'Markaz tizimida guruh biriktirilgan',
+                  ? t(
+                      'Joriy guruh biriktirilmagan',
+                      'Текущая группа не назначена',
+                      'No current group assigned',
+                    )
+                  : t(
+                      'Markaz tizimida guruh biriktirilgan',
+                      'Группа назначена в системе центра',
+                      'A group is assigned in the center system',
+                    ),
               accent: studentCyan,
-              progress: total <= 0 ? null : withCohort / total,
+              progress: profile['current_cohort'] == null ? 0 : 1,
             ),
             _IdentityMetric(
               icon: Icons.school_outlined,
-              label: 'O‘qish statusi',
-              value: _statusLabel('${profile['status'] ?? ''}'),
+              label: t('O‘qish statusi', 'Статус обучения', 'Learning status'),
+              value: _identityStatusLabel(
+                context,
+                '${profile['status'] ?? ''}',
+              ),
               detail: _filled(profile['enrollment_date'])
-                  ? '${_dateLabel(profile['enrollment_date'])} dan boshlab'
-                  : 'Qabul sanasi hali ko‘rsatilmagan',
+                  ? t(
+                      '${_dateLabel(profile['enrollment_date'])} dan boshlab',
+                      'С ${_dateLabel(profile['enrollment_date'])}',
+                      'Since ${_dateLabel(profile['enrollment_date'])}',
+                    )
+                  : t(
+                      'Qabul sanasi hali ko‘rsatilmagan',
+                      'Дата зачисления ещё не указана',
+                      'Enrollment date is not specified yet',
+                    ),
               accent: studentCyan,
             ),
             _IdentityMetric(
               icon: profile['is_blocked'] == true
                   ? Icons.lock_rounded
                   : Icons.verified_user_rounded,
-              label: 'Akkaunt xavfsizligi',
+              label: t(
+                'Akkaunt xavfsizligi',
+                'Безопасность аккаунта',
+                'Account security',
+              ),
               value: profile['is_blocked'] == true
-                  ? 'Cheklangan'
-                  : 'Himoyalangan',
+                  ? t('Cheklangan', 'Ограничен', 'Restricted')
+                  : t('Himoyalangan', 'Защищён', 'Protected'),
               detail: profile['is_blocked'] == true
                   ? valueText(profile, const ['block_reason'])
-                  : 'Kirish va o‘qish xizmatlari faol',
+                  : t(
+                      'Kirish va o‘qish xizmatlari faol',
+                      'Доступ и учебные сервисы активны',
+                      'Access and learning services are active',
+                    ),
               accent: profile['is_blocked'] == true
                   ? Theme.of(context).colorScheme.error
                   : Sf.success,
@@ -123,171 +900,253 @@ class _StudentIdentityPage extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 20),
-        const _IdentitySectionHeading(
+        _IdentitySectionHeading(
           icon: Icons.badge_outlined,
-          overline: 'O‘QUVCHI DOSYESI',
-          title: 'Shaxsiy va akademik ma’lumotlar',
-          description:
-              'Markaz tizimida tasdiqlangan identifikatsiya va ta’lim maydonlari.',
+          overline: t('O‘QUVCHI DOSYESI', 'ДОСЬЕ УЧЕНИКА', 'STUDENT FILE'),
+          title: t(
+            'Shaxsiy va akademik ma’lumotlar',
+            'Личные и учебные данные',
+            'Personal and academic information',
+          ),
+          description: t(
+            'Markaz tizimida tasdiqlangan identifikatsiya va ta’lim maydonlari.',
+            'Подтверждённые поля личных и учебных данных в системе центра.',
+            'Verified identity and education fields in the center system.',
+          ),
         ),
         const SizedBox(height: 12),
         _IdentityInformationPanel(
           accent: studentBlue,
           groups: [
             _IdentityInfoGroup(
-              title: 'Aloqa va shaxsiy ma’lumotlar',
+              title: t(
+                'Aloqa va shaxsiy ma’lumotlar',
+                'Контакты и личные данные',
+                'Contact and personal information',
+              ),
               icon: Icons.person_outline_rounded,
               fields: [
                 _IdentityField(
                   Icons.person_outline_rounded,
-                  'Ism',
+                  t('Ism', 'Имя', 'First name'),
                   valueText(profile, const ['first_name']),
                 ),
                 _IdentityField(
                   Icons.person_outline_rounded,
-                  'Familiya',
+                  t('Familiya', 'Фамилия', 'Last name'),
                   valueText(profile, const ['last_name']),
                 ),
                 _IdentityField(
                   Icons.person_outline_rounded,
-                  'Otasining ismi',
+                  t('Otasining ismi', 'Отчество', 'Middle name'),
                   valueText(profile, const ['middle_name']),
                 ),
                 _IdentityField(
                   Icons.phone_iphone_rounded,
-                  'Telefon',
+                  t('Telefon', 'Телефон', 'Phone'),
                   valueText(profile, const ['phone']),
                 ),
                 _IdentityField(
                   Icons.alternate_email_rounded,
-                  'Email',
+                  t('Email', 'Email', 'Email'),
                   valueText(profile, const ['email']),
                 ),
                 _IdentityField(
                   Icons.cake_outlined,
-                  'Tug‘ilgan sana',
+                  t('Tug‘ilgan sana', 'Дата рождения', 'Date of birth'),
                   _dateLabel(profile['birthdate']),
                 ),
                 _IdentityField(
                   Icons.wc_outlined,
-                  'Jins',
-                  _genderLabel('${profile['gender'] ?? ''}'),
+                  t('Jins', 'Пол', 'Gender'),
+                  _genderLabel(context, '${profile['gender'] ?? ''}'),
                 ),
                 _IdentityField(
                   Icons.location_on_outlined,
-                  'Hudud',
+                  t('Hudud', 'Регион', 'Region'),
                   valueText(profile, const ['location']),
                 ),
                 _IdentityField(
                   Icons.login_rounded,
-                  'Oxirgi kirish',
+                  t('Oxirgi kirish', 'Последний вход', 'Last sign-in'),
                   _dateLabel(profile['last_login_at'], time: true),
                 ),
               ],
             ),
             _IdentityInfoGroup(
-              title: 'Ta’lim profili',
+              title: t(
+                'Ta’lim profili',
+                'Учебный профиль',
+                'Education profile',
+              ),
               icon: Icons.school_outlined,
               fields: [
                 _IdentityField(
                   Icons.tag_rounded,
-                  'O‘quvchi ID',
+                  t('O‘quvchi ID', 'ID ученика', 'Student ID'),
                   valueText(profile, const ['student_id']),
                 ),
                 _IdentityField(
                   Icons.auto_graph_rounded,
-                  'Akademik daraja',
+                  t(
+                    'Akademik daraja',
+                    'Академический уровень',
+                    'Academic level',
+                  ),
                   valueText(profile, const ['academic_level']),
                 ),
                 _IdentityField(
                   Icons.groups_2_outlined,
-                  'Guruh holati',
-                  _referenceLabel(profile['current_cohort']),
+                  t('Guruh holati', 'Статус группы', 'Group status'),
+                  valueText(
+                    profile,
+                    const ['current_cohort_name'],
+                    fallback: _referenceLabel(
+                      context,
+                      profile['current_cohort'],
+                    ),
+                  ),
                 ),
                 _IdentityField(
                   Icons.apartment_rounded,
-                  'Filial holati',
-                  _referenceLabel(profile['branch']),
+                  t('Filial holati', 'Статус филиала', 'Branch status'),
+                  valueText(profile, const [
+                    'branch_name',
+                  ], fallback: _referenceLabel(context, profile['branch'])),
+                ),
+                _IdentityField(
+                  Icons.co_present_outlined,
+                  t(
+                    'Asosiy ustoz',
+                    'Основной преподаватель',
+                    'Primary teacher',
+                  ),
+                  valueText(profile, const [
+                    'primary_teacher_name',
+                    'teacher_name',
+                  ]),
                 ),
                 _IdentityField(
                   Icons.event_available_outlined,
-                  'Qabul sanasi',
+                  t('Qabul sanasi', 'Дата зачисления', 'Enrollment date'),
                   _dateLabel(profile['enrollment_date']),
                 ),
                 _IdentityField(
                   Icons.account_balance_outlined,
-                  'Oldingi maktab',
+                  t('Oldingi maktab', 'Предыдущая школа', 'Previous school'),
                   valueText(profile, const ['previous_school']),
                 ),
               ],
             ),
             _IdentityInfoGroup(
-              title: 'Akkaunt va tizim holati',
+              title: t(
+                'Akkaunt va tizim holati',
+                'Аккаунт и статус системы',
+                'Account and system status',
+              ),
               icon: Icons.admin_panel_settings_outlined,
               fields: [
                 _IdentityField(
                   Icons.alternate_email_rounded,
-                  'Login',
+                  t('Login', 'Логин', 'Username'),
                   valueText(profile, const ['username']),
                 ),
                 _IdentityField(
                   Icons.power_settings_new_rounded,
-                  'Akkaunt holati',
-                  _activeAccountLabel(profile['is_active']),
+                  t('Akkaunt holati', 'Статус аккаунта', 'Account status'),
+                  _activeAccountLabel(context, profile['is_active']),
                 ),
                 _IdentityField(
                   Icons.password_rounded,
-                  'Parol holati',
-                  _passwordStateLabel(profile['must_change_password']),
+                  t('Parol holati', 'Статус пароля', 'Password status'),
+                  _passwordStateLabel(context, profile['must_change_password']),
                 ),
                 _IdentityField(
                   Icons.lock_clock_outlined,
-                  'Bloklangan sana',
+                  t('Bloklangan sana', 'Дата блокировки', 'Blocked at'),
                   _dateLabel(profile['blocked_at'], time: true),
                 ),
                 _IdentityField(
                   Icons.event_outlined,
-                  'Profil yaratilgan',
+                  t('Profil yaratilgan', 'Профиль создан', 'Profile created'),
                   _dateLabel(profile['created_at'], time: true),
                 ),
                 _IdentityField(
                   Icons.update_rounded,
-                  'So‘nggi yangilanish',
+                  t(
+                    'So‘nggi yangilanish',
+                    'Последнее обновление',
+                    'Last updated',
+                  ),
                   _dateLabel(profile['updated_at'], time: true),
                 ),
               ],
             ),
           ],
         ),
-        const SizedBox(height: 18),
-        _StudentReadinessPanel(
-          profile: profile,
-          completeness: profileProgress,
+        const SizedBox(height: 14),
+        _IdentityDisclosureCard(
+          key: const ValueKey('student-profile-insights'),
+          icon: Icons.insights_outlined,
+          title: t(
+            'Profil tayyorligi va markaz ma’lumotlari',
+            'Готовность профиля и данные центра',
+            'Profile readiness and center data',
+          ),
+          description: t(
+            'To‘liqlik tekshiruvi, guruh kesimi va sizga ochiq markaz ma’lumotlari.',
+            'Проверка заполненности, срез по группам и доступные вам данные центра.',
+            'Completeness checks, group breakdown, and center data available to you.',
+          ),
           accent: studentBlue,
+          count:
+              1 +
+              (statusStats.isNotEmpty || branchStats.isNotEmpty ? 1 : 0) +
+              (activeReasons.isNotEmpty ? 1 : 0) +
+              (birthdays.isNotEmpty ? 1 : 0),
+          initiallyExpanded: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _StudentReadinessPanel(
+                profile: profile,
+                completeness: profileProgress,
+                accent: studentBlue,
+              ),
+              if (statusStats.isNotEmpty || branchStats.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                _StudentScopeBreakdown(
+                  statusEntries: statusStats,
+                  branchEntries: branchStats,
+                  total: total,
+                ),
+              ],
+              if (activeReasons.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                _EnrollmentReasonCloud(reasons: activeReasons),
+              ],
+              if (birthdays.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                _BirthdayStrip(rows: birthdays),
+              ],
+            ],
+          ),
         ),
-        if (statusStats.isNotEmpty || branchStats.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          const _IdentitySectionHeading(
-            icon: Icons.analytics_outlined,
-            overline: 'JONLI KO‘RSATKICHLAR',
-            title: 'Guruh va markaz kesimi',
-            description:
-                'O‘quv markazidagi faol holatlar va filiallar taqsimoti.',
-          ),
-          const SizedBox(height: 12),
-          _StudentScopeBreakdown(
-            statusEntries: statusStats,
-            branchEntries: branchStats,
-            total: total,
-          ),
-        ],
         if (_hasEmergencyContacts(profile)) ...[
           const SizedBox(height: 20),
-          const _IdentitySectionHeading(
+          _IdentitySectionHeading(
             icon: Icons.emergency_outlined,
-            overline: 'MUHIM ALOQA',
-            title: 'Favqulodda bog‘lanish',
-            description: 'Markazga taqdim etilgan tezkor aloqa ma’lumotlari.',
+            overline: t('MUHIM ALOQA', 'ВАЖНЫЙ КОНТАКТ', 'IMPORTANT CONTACT'),
+            title: t(
+              'Favqulodda bog‘lanish',
+              'Экстренная связь',
+              'Emergency contact',
+            ),
+            description: t(
+              'Markazga taqdim etilgan tezkor aloqa ma’lumotlari.',
+              'Данные для экстренной связи, переданные центру.',
+              'Emergency contact information provided to the center.',
+            ),
           ),
           const SizedBox(height: 12),
           _EmergencyContactPanel(
@@ -295,47 +1154,32 @@ class _StudentIdentityPage extends StatelessWidget {
             accent: Theme.of(context).colorScheme.error,
           ),
         ],
-        if (activeReasons.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          _IdentitySectionHeading(
-            icon: Icons.explore_outlined,
-            overline: 'MARKAZ KATALOGI',
-            title: 'Qabul yo‘nalishlari',
-            description:
-                'Markazda hozir faol bo‘lgan qabul sabab va yo‘nalishlari.',
-            count: activeReasons.length,
-          ),
-          const SizedBox(height: 12),
-          _EnrollmentReasonCloud(reasons: activeReasons),
-        ],
-        if (birthdays.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          _IdentitySectionHeading(
-            icon: Icons.cake_outlined,
-            overline: 'HAMJAMIYAT',
-            title: 'Yaqin tug‘ilgan kunlar',
-            description:
-                'Sizga ko‘rishga ruxsat berilgan o‘quvchilar orasidagi yaqin sanalar.',
-            count: birthdays.length,
-          ),
-          const SizedBox(height: 12),
-          _BirthdayStrip(rows: birthdays),
-        ],
         const SizedBox(height: 20),
         _IdentitySectionHeading(
           icon: Icons.route_rounded,
-          overline: 'TARIX',
-          title: 'O‘qish yo‘li',
-          description: 'Profil statusidagi rasmiy o‘zgarishlar xronologiyasi.',
+          overline: t('TARIX', 'ИСТОРИЯ', 'HISTORY'),
+          title: t('O‘qish yo‘li', 'Учебный путь', 'Learning journey'),
+          description: t(
+            'Profil statusidagi rasmiy o‘zgarishlar xronologiyasi.',
+            'Хронология официальных изменений статуса профиля.',
+            'Timeline of official profile status changes.',
+          ),
           count: portal.studentEvents.length,
         ),
         const SizedBox(height: 12),
         if (portal.studentEvents.isEmpty)
           _IdentityEmptyPanel(
             icon: Icons.route_outlined,
-            title: 'Yo‘l endi boshlanmoqda',
-            message:
-                'Status o‘zgarganda tarix, sana va markaz izohi shu yerda paydo bo‘ladi.',
+            title: t(
+              'Yo‘l endi boshlanmoqda',
+              'Путь только начинается',
+              'The journey is just beginning',
+            ),
+            message: t(
+              'Status o‘zgarganda tarix, sana va markaz izohi shu yerda paydo bo‘ladi.',
+              'При изменении статуса здесь появятся дата, история и комментарий центра.',
+              'When the status changes, its date, history, and center note will appear here.',
+            ),
             accent: studentBlue,
           )
         else
@@ -345,6 +1189,26 @@ class _StudentIdentityPage extends StatelessWidget {
   }
 }
 
+class _ProfileEditAction extends StatelessWidget {
+  const _ProfileEditAction({required this.portal});
+
+  final PortalController portal;
+
+  @override
+  Widget build(BuildContext context) => FilledButton.tonalIcon(
+    onPressed: () => Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            PortalScope(controller: portal, child: const _ProfileEditScreen()),
+      ),
+    ),
+    icon: const Icon(Icons.edit_outlined, size: 18),
+    label: Text(_identityText(context, 'Tahrirlash', 'Редактировать', 'Edit')),
+  );
+}
+
+// Retained for legacy visual fixtures.
+// ignore: unused_element
 class _ParentFamilyPage extends StatelessWidget {
   const _ParentFamilyPage({required this.portal});
 
@@ -352,6 +1216,8 @@ class _ParentFamilyPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    String t(String uz, String ru, String en) =>
+        _identityText(context, uz, ru, en);
     final parent = portal.parentProfile;
     final child = portal.studentProfile;
     final selectedId = portal.selectedStudentId;
@@ -366,22 +1232,36 @@ class _ParentFamilyPage extends StatelessWidget {
     final familyWarm = Theme.of(context).colorScheme.secondary;
 
     return _PortalPage(
-      title: 'Farzandlarim',
-      subtitle:
-          'Oilaviy nazorat markazi: farzand profili, rasmiy vakillar va xavfsiz olib ketish.',
+      title: t('Farzandlarim', 'Мои дети', 'My children'),
+      subtitle: t(
+        'Oilaviy nazorat markazi: farzand profili, rasmiy vakillar va xavfsiz olib ketish.',
+        'Центр семейного контроля: профиль ребёнка, официальные представители и безопасное получение.',
+        'Family control center: child profile, official guardians, and safe pickup.',
+      ),
       section: PortalSection.identity,
       trailing: _HeaderCountBadge(
         icon: Icons.family_restroom_rounded,
-        label: '${portal.children.length} farzand',
+        label: t(
+          '${portal.children.length} farzand',
+          '${portal.children.length} ${_russianChildrenWord(portal.children.length)}',
+          '${portal.children.length} ${portal.children.length == 1 ? 'child' : 'children'}',
+        ),
         accent: familyTeal,
       ),
       children: [
         if (parent.isEmpty)
           _IdentityEmptyPanel(
             icon: Icons.family_restroom_outlined,
-            title: 'Ota-ona profili topilmadi',
-            message:
-                'Kabinetning shaxsiy ma’lumotlari serverdan qaytgach oila profili shu yerda ko‘rinadi.',
+            title: t(
+              'Ota-ona profili topilmadi',
+              'Профиль родителя не найден',
+              'Parent profile not found',
+            ),
+            message: t(
+              'Kabinetning shaxsiy ma’lumotlari serverdan qaytgach oila profili shu yerda ko‘rinadi.',
+              'Семейный профиль появится здесь, когда сервер вернёт личные данные кабинета.',
+              'The family profile will appear here when the server returns the account information.',
+            ),
             accent: familyTeal,
           )
         else
@@ -404,27 +1284,59 @@ class _ParentFamilyPage extends StatelessWidget {
           items: [
             _IdentityMetric(
               icon: Icons.child_care_rounded,
-              label: 'Oiladagi o‘quvchilar',
+              label: t(
+                'Oiladagi o‘quvchilar',
+                'Ученики в семье',
+                'Students in family',
+              ),
               value: '${portal.children.length}',
               detail: portal.children.length == 1
-                  ? 'Bitta faol o‘quvchi profili'
-                  : 'Kabinetga ulangan profillar',
+                  ? t(
+                      'Bitta faol o‘quvchi profili',
+                      'Один активный профиль ученика',
+                      'One active student profile',
+                    )
+                  : t(
+                      'Kabinetga ulangan profillar',
+                      'Профили, привязанные к кабинету',
+                      'Profiles linked to this account',
+                    ),
               accent: familyTeal,
             ),
             _IdentityMetric(
               icon: Icons.verified_user_outlined,
-              label: 'Rasmiy vakillar',
+              label: t(
+                'Rasmiy vakillar',
+                'Официальные представители',
+                'Official guardians',
+              ),
               value: '${visibleGuardians.length}',
-              detail: 'Tanlangan farzandga bog‘langan',
+              detail: t(
+                'Tanlangan farzandga bog‘langan',
+                'Привязаны к выбранному ребёнку',
+                'Linked to the selected child',
+              ),
               accent: familyWarm,
             ),
             _IdentityMetric(
               icon: Icons.directions_walk_rounded,
-              label: 'Faol ruxsatnomalar',
+              label: t(
+                'Faol ruxsatnomalar',
+                'Активные разрешения',
+                'Active permits',
+              ),
               value: '$activePickups',
               detail: visiblePickups.isEmpty
-                  ? 'Ruxsatnoma hali kiritilmagan'
-                  : '${visiblePickups.length} ta yozuvdan faol',
+                  ? t(
+                      'Ruxsatnoma hali kiritilmagan',
+                      'Разрешения ещё не добавлены',
+                      'No permits have been added yet',
+                    )
+                  : t(
+                      '${visiblePickups.length} ta yozuvdan faol',
+                      'Активных из ${visiblePickups.length}',
+                      'Active out of ${visiblePickups.length} records',
+                    ),
               accent: Sf.success,
               progress: visiblePickups.isEmpty
                   ? 0
@@ -432,29 +1344,51 @@ class _ParentFamilyPage extends StatelessWidget {
             ),
             _IdentityMetric(
               icon: Icons.fact_check_outlined,
-              label: 'Farzand profili',
+              label: t('Farzand profili', 'Профиль ребёнка', 'Child profile'),
               value: '${(childProgress * 100).round()}%',
-              detail: 'Ma’lumotlarning to‘liqligi',
+              detail: t(
+                'Ma’lumotlarning to‘liqligi',
+                'Заполненность данных',
+                'Information completeness',
+              ),
               accent: familyWarm,
               progress: childProgress,
             ),
           ],
         ),
         const SizedBox(height: 20),
-        const _IdentitySectionHeading(
+        _IdentitySectionHeading(
           icon: Icons.face_retouching_natural_rounded,
-          overline: 'TANLANGAN FARZAND',
-          title: 'O‘quvchi profili va holati',
-          description:
-              'Markaz bazasidagi joriy akademik va shaxsiy ma’lumotlar.',
+          overline: t(
+            'TANLANGAN FARZAND',
+            'ВЫБРАННЫЙ РЕБЁНОК',
+            'SELECTED CHILD',
+          ),
+          title: t(
+            'O‘quvchi profili va holati',
+            'Профиль и статус ученика',
+            'Student profile and status',
+          ),
+          description: t(
+            'Markaz bazasidagi joriy akademik va shaxsiy ma’lumotlar.',
+            'Текущие учебные и личные данные из базы центра.',
+            'Current academic and personal information in the center database.',
+          ),
         ),
         const SizedBox(height: 12),
         if (child.isEmpty)
           _IdentityEmptyPanel(
             icon: Icons.person_search_outlined,
-            title: 'Farzand profili topilmadi',
-            message:
-                'Markaz rasmiy bog‘lanishni tasdiqlagach profil shu yerda ko‘rinadi.',
+            title: t(
+              'Farzand profili topilmadi',
+              'Профиль ребёнка не найден',
+              'Child profile not found',
+            ),
+            message: t(
+              'Markaz rasmiy bog‘lanishni tasdiqlagach profil shu yerda ko‘rinadi.',
+              'Профиль появится здесь после подтверждения официальной связи центром.',
+              'The profile will appear here after the center confirms the official link.',
+            ),
             accent: familyTeal,
           )
         else ...[
@@ -464,126 +1398,167 @@ class _ParentFamilyPage extends StatelessWidget {
             accent: familyWarm,
             groups: [
               _IdentityInfoGroup(
-                title: 'Shaxsiy ma’lumotlar',
+                title: t(
+                  'Shaxsiy ma’lumotlar',
+                  'Личные данные',
+                  'Personal information',
+                ),
                 icon: Icons.contact_page_outlined,
                 fields: [
                   _IdentityField(
                     Icons.person_outline_rounded,
-                    'Ism',
+                    t('Ism', 'Имя', 'First name'),
                     valueText(child, const ['first_name']),
                   ),
                   _IdentityField(
                     Icons.person_outline_rounded,
-                    'Familiya',
+                    t('Familiya', 'Фамилия', 'Last name'),
                     valueText(child, const ['last_name']),
                   ),
                   _IdentityField(
                     Icons.person_outline_rounded,
-                    'Otasining ismi',
+                    t('Otasining ismi', 'Отчество', 'Middle name'),
                     valueText(child, const ['middle_name']),
                   ),
                   _IdentityField(
                     Icons.tag_rounded,
-                    'O‘quvchi ID',
+                    t('O‘quvchi ID', 'ID ученика', 'Student ID'),
                     valueText(child, const ['student_id']),
                   ),
                   _IdentityField(
                     Icons.cake_outlined,
-                    'Tug‘ilgan sana',
+                    t('Tug‘ilgan sana', 'Дата рождения', 'Date of birth'),
                     _dateLabel(child['birthdate']),
                   ),
                   _IdentityField(
                     Icons.phone_iphone_rounded,
-                    'Telefon',
+                    t('Telefon', 'Телефон', 'Phone'),
                     valueText(child, const ['phone']),
                   ),
                   _IdentityField(
                     Icons.alternate_email_rounded,
-                    'Email',
+                    t('Email', 'Email', 'Email'),
                     valueText(child, const ['email']),
                   ),
                   _IdentityField(
                     Icons.wc_outlined,
-                    'Jins',
-                    _genderLabel('${child['gender'] ?? ''}'),
+                    t('Jins', 'Пол', 'Gender'),
+                    _genderLabel(context, '${child['gender'] ?? ''}'),
                   ),
                   _IdentityField(
                     Icons.location_on_outlined,
-                    'Hudud',
+                    t('Hudud', 'Регион', 'Region'),
                     valueText(child, const ['location']),
                   ),
                 ],
               ),
               _IdentityInfoGroup(
-                title: 'Ta’lim holati',
+                title: t(
+                  'Ta’lim holati',
+                  'Статус обучения',
+                  'Education status',
+                ),
                 icon: Icons.menu_book_outlined,
                 fields: [
                   _IdentityField(
                     Icons.auto_graph_rounded,
-                    'Akademik daraja',
+                    t(
+                      'Akademik daraja',
+                      'Академический уровень',
+                      'Academic level',
+                    ),
                     valueText(child, const ['academic_level']),
                   ),
                   _IdentityField(
                     Icons.groups_2_outlined,
-                    'Guruh holati',
-                    _referenceLabel(child['current_cohort']),
+                    t('Guruh holati', 'Статус группы', 'Group status'),
+                    valueText(
+                      child,
+                      const ['current_cohort_name'],
+                      fallback: _referenceLabel(
+                        context,
+                        child['current_cohort'],
+                      ),
+                    ),
                   ),
                   _IdentityField(
                     Icons.apartment_rounded,
-                    'Filial holati',
-                    _referenceLabel(child['branch']),
+                    t('Filial holati', 'Статус филиала', 'Branch status'),
+                    valueText(child, const [
+                      'branch_name',
+                    ], fallback: _referenceLabel(context, child['branch'])),
+                  ),
+                  _IdentityField(
+                    Icons.co_present_outlined,
+                    t(
+                      'Asosiy ustoz',
+                      'Основной преподаватель',
+                      'Primary teacher',
+                    ),
+                    valueText(child, const [
+                      'primary_teacher_name',
+                      'teacher_name',
+                    ]),
                   ),
                   _IdentityField(
                     Icons.event_available_outlined,
-                    'Qabul sanasi',
+                    t('Qabul sanasi', 'Дата зачисления', 'Enrollment date'),
                     _dateLabel(child['enrollment_date']),
                   ),
                   _IdentityField(
                     Icons.account_balance_outlined,
-                    'Oldingi maktab',
+                    t('Oldingi maktab', 'Предыдущая школа', 'Previous school'),
                     valueText(child, const ['previous_school']),
                   ),
                   _IdentityField(
                     Icons.shield_outlined,
-                    'Akkaunt',
+                    t('Akkaunt', 'Аккаунт', 'Account'),
                     child['is_blocked'] == true
-                        ? 'Cheklangan'
-                        : _activeAccountLabel(child['is_active']),
+                        ? t('Cheklangan', 'Ограничен', 'Restricted')
+                        : _activeAccountLabel(context, child['is_active']),
                   ),
                 ],
               ),
               _IdentityInfoGroup(
-                title: 'Akkaunt va xizmatlar',
+                title: t(
+                  'Akkaunt va xizmatlar',
+                  'Аккаунт и сервисы',
+                  'Account and services',
+                ),
                 icon: Icons.security_outlined,
                 fields: [
                   _IdentityField(
                     Icons.alternate_email_rounded,
-                    'Login',
+                    t('Login', 'Логин', 'Username'),
                     valueText(child, const ['username']),
                   ),
                   _IdentityField(
                     Icons.power_settings_new_rounded,
-                    'Tizim holati',
-                    _activeAccountLabel(child['is_active']),
+                    t('Tizim holati', 'Статус системы', 'System status'),
+                    _activeAccountLabel(context, child['is_active']),
                   ),
                   _IdentityField(
                     Icons.password_rounded,
-                    'Parol holati',
-                    _passwordStateLabel(child['must_change_password']),
+                    t('Parol holati', 'Статус пароля', 'Password status'),
+                    _passwordStateLabel(context, child['must_change_password']),
                   ),
                   _IdentityField(
                     Icons.login_rounded,
-                    'Oxirgi kirish',
+                    t('Oxirgi kirish', 'Последний вход', 'Last sign-in'),
                     _dateLabel(child['last_login_at'], time: true),
                   ),
                   _IdentityField(
                     Icons.lock_clock_outlined,
-                    'Bloklangan sana',
+                    t('Bloklangan sana', 'Дата блокировки', 'Blocked at'),
                     _dateLabel(child['blocked_at'], time: true),
                   ),
                   _IdentityField(
                     Icons.update_rounded,
-                    'So‘nggi yangilanish',
+                    t(
+                      'So‘nggi yangilanish',
+                      'Последнее обновление',
+                      'Last updated',
+                    ),
                     _dateLabel(child['updated_at'], time: true),
                   ),
                 ],
@@ -598,96 +1573,154 @@ class _ParentFamilyPage extends StatelessWidget {
             ),
           ],
         ],
-        const SizedBox(height: 20),
-        const _IdentitySectionHeading(
+        const SizedBox(height: 14),
+        _IdentityDisclosureCard(
+          key: const ValueKey('parent-own-profile-section'),
           icon: Icons.person_pin_outlined,
-          overline: 'OILA PROFILI',
-          title: 'Ota-ona ma’lumotlari',
-          description:
-              'Markaz bilan aloqa qiluvchi tasdiqlangan kabinet egasi.',
+          title: t(
+            'Ota-ona ma’lumotlari',
+            'Данные родителя',
+            'Parent information',
+          ),
+          description: t(
+            'Markaz bilan aloqa qiluvchi tasdiqlangan kabinet egasi.',
+            'Подтверждённый владелец кабинета для связи с центром.',
+            'Verified account owner who communicates with the center.',
+          ),
+          accent: familyTeal,
+          initiallyExpanded: false,
+          child: parent.isEmpty
+              ? _IdentityEmptyPanel(
+                  icon: Icons.person_search_outlined,
+                  title: t(
+                    'Shaxsiy ma’lumotlar mavjud emas',
+                    'Личные данные отсутствуют',
+                    'Personal information is unavailable',
+                  ),
+                  message: t(
+                    'Ota-ona kartasi ma’lumotlar tasdiqlangach avtomatik to‘ldiriladi.',
+                    'Карта родителя заполнится автоматически после подтверждения данных.',
+                    'The parent card will be filled automatically after the information is verified.',
+                  ),
+                  accent: familyTeal,
+                )
+              : _ParentIdentityCard(
+                  parent: parent,
+                  fallbackName: portal.displayName,
+                  completeness: parentProgress,
+                ),
         ),
-        const SizedBox(height: 12),
-        if (parent.isEmpty)
-          _IdentityEmptyPanel(
-            icon: Icons.person_search_outlined,
-            title: 'Shaxsiy ma’lumotlar mavjud emas',
-            message:
-                'Ota-ona kartasi ma’lumotlar tasdiqlangach avtomatik to‘ldiriladi.',
-            accent: familyTeal,
-          )
-        else
-          _ParentIdentityCard(
-            parent: parent,
-            fallbackName: portal.displayName,
-            completeness: parentProgress,
-          ),
         if (child.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          const _IdentitySectionHeading(
+          const SizedBox(height: 14),
+          _IdentityDisclosureCard(
+            key: const ValueKey('parent-family-safety-section'),
             icon: Icons.health_and_safety_outlined,
-            overline: 'XAVFSIZLIK MARKAZI',
-            title: 'Farzand bo‘yicha tezkor holat',
-            description:
-                'Akkaunt, vakillik va olib ketish ruxsatlari bitta ko‘rinishda.',
-          ),
-          const SizedBox(height: 12),
-          _FamilySafetyOverview(
-            child: child,
-            guardians: visibleGuardians,
-            pickups: visiblePickups,
+            title: t(
+              'Farzand bo‘yicha tezkor holat',
+              'Краткий статус ребёнка',
+              'Child status overview',
+            ),
+            description: t(
+              'Akkaunt, vakillik va olib ketish ruxsatlari bitta ko‘rinishda.',
+              'Аккаунт, представители и разрешения на получение в одном месте.',
+              'Account, guardianship, and pickup permits in one view.',
+            ),
+            accent: Sf.success,
+            initiallyExpanded: false,
+            child: _FamilySafetyOverview(
+              child: child,
+              guardians: visibleGuardians,
+              pickups: visiblePickups,
+            ),
           ),
         ],
-        const SizedBox(height: 20),
-        _IdentitySectionHeading(
+        const SizedBox(height: 14),
+        _IdentityDisclosureCard(
+          key: const ValueKey('parent-guardians-section'),
           icon: Icons.account_tree_outlined,
-          overline: 'RASMİY BOG‘LANISHLAR',
-          title: 'Vakillik va qarindoshlik',
-          description:
-              'Farzand nomidan markaz bilan bog‘lanishga ruxsat berilgan shaxslar.',
-          count: visibleGuardians.length,
-        ),
-        const SizedBox(height: 12),
-        if (visibleGuardians.isEmpty)
-          _IdentityEmptyPanel(
-            icon: Icons.link_off_rounded,
-            title: 'Rasmiy bog‘lanish topilmadi',
-            message:
-                'Guardian yozuvi markaz tomonidan tasdiqlangach shu bo‘limda ko‘rinadi.',
-            accent: familyTeal,
-          )
-        else
-          _GuardianGrid(rows: visibleGuardians),
-        const SizedBox(height: 20),
-        _IdentitySectionHeading(
-          icon: Icons.directions_walk_rounded,
-          overline: 'XAVFSIZ OLIB KETISH',
-          title: 'Tasdiqlangan ruxsatnomalar',
-          description:
-              'Farzandingizni markazdan olib ketishi mumkin bo‘lgan shaxslar.',
-          count: visiblePickups.length,
-        ),
-        const SizedBox(height: 12),
-        if (visiblePickups.isEmpty)
-          _IdentityEmptyPanel(
-            icon: Icons.person_pin_circle_outlined,
-            title: 'Ruxsatnomalar mavjud emas',
-            message:
-                'Ruxsat berilgan shaxslar markaz tasdig‘idan so‘ng shu yerda chiqadi.',
-            accent: familyWarm,
-          )
-        else
-          _PickupPermitGrid(rows: visiblePickups),
-        if (portal.studentEvents.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          _IdentitySectionHeading(
-            icon: Icons.history_edu_rounded,
-            overline: 'FARZAND TARIXI',
-            title: 'O‘qish yo‘li',
-            description: 'Tanlangan farzand statusining rasmiy xronologiyasi.',
-            count: portal.studentEvents.length,
+          title: t(
+            'Vakillik va qarindoshlik',
+            'Представители и родство',
+            'Guardianship and relationships',
           ),
-          const SizedBox(height: 12),
-          _PremiumTimeline(events: portal.studentEvents, accent: familyTeal),
+          description: t(
+            'Farzand nomidan markaz bilan bog‘lanishga ruxsat berilgan shaxslar.',
+            'Лица, которым разрешено связываться с центром от имени ребёнка.',
+            'People authorized to contact the center on behalf of the child.',
+          ),
+          count: visibleGuardians.length,
+          accent: familyTeal,
+          initiallyExpanded: false,
+          child: visibleGuardians.isEmpty
+              ? _IdentityEmptyPanel(
+                  icon: Icons.link_off_rounded,
+                  title: t(
+                    'Rasmiy bog‘lanish topilmadi',
+                    'Официальная связь не найдена',
+                    'No official link found',
+                  ),
+                  message: t(
+                    'Guardian yozuvi markaz tomonidan tasdiqlangach shu bo‘limda ko‘rinadi.',
+                    'Запись о представителе появится здесь после подтверждения центром.',
+                    'The guardian record will appear here after center approval.',
+                  ),
+                  accent: familyTeal,
+                )
+              : _GuardianGrid(rows: visibleGuardians),
+        ),
+        const SizedBox(height: 14),
+        _IdentityDisclosureCard(
+          key: const ValueKey('parent-pickups-section'),
+          icon: Icons.directions_walk_rounded,
+          title: t(
+            'Tasdiqlangan ruxsatnomalar',
+            'Подтверждённые разрешения',
+            'Approved permits',
+          ),
+          description: t(
+            'Farzandingizni markazdan olib ketishi mumkin bo‘lgan shaxslar.',
+            'Лица, которые могут забрать вашего ребёнка из центра.',
+            'People authorized to pick up your child from the center.',
+          ),
+          count: visiblePickups.length,
+          accent: familyWarm,
+          initiallyExpanded: false,
+          child: visiblePickups.isEmpty
+              ? _IdentityEmptyPanel(
+                  icon: Icons.person_pin_circle_outlined,
+                  title: t(
+                    'Ruxsatnomalar mavjud emas',
+                    'Разрешения отсутствуют',
+                    'No permits available',
+                  ),
+                  message: t(
+                    'Ruxsat berilgan shaxslar markaz tasdig‘idan so‘ng shu yerda chiqadi.',
+                    'Разрешённые лица появятся здесь после подтверждения центром.',
+                    'Authorized people will appear here after center approval.',
+                  ),
+                  accent: familyWarm,
+                )
+              : _PickupPermitGrid(rows: visiblePickups),
+        ),
+        if (portal.studentEvents.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          _IdentityDisclosureCard(
+            key: const ValueKey('parent-student-history-section'),
+            icon: Icons.history_edu_rounded,
+            title: t('O‘qish yo‘li', 'Учебный путь', 'Learning journey'),
+            description: t(
+              'Tanlangan farzand statusining rasmiy xronologiyasi.',
+              'Официальная хронология статуса выбранного ребёнка.',
+              'Official status timeline for the selected child.',
+            ),
+            count: portal.studentEvents.length,
+            accent: familyTeal,
+            initiallyExpanded: false,
+            child: _PremiumTimeline(
+              events: portal.studentEvents,
+              accent: familyTeal,
+            ),
+          ),
         ],
       ],
     );
@@ -707,6 +1740,8 @@ class _StudentPassportHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    String t(String uz, String ru, String en) =>
+        _identityText(context, uz, ru, en);
     final scheme = Theme.of(context).colorScheme;
     final name = valueText(profile, const [
       'full_name',
@@ -714,12 +1749,16 @@ class _StudentPassportHero extends StatelessWidget {
     final active =
         profile['is_active'] == true && profile['is_blocked'] == false;
     final accessLabel = profile['is_blocked'] == true
-        ? 'Kirish cheklangan'
+        ? t('Kirish cheklangan', 'Доступ ограничен', 'Access restricted')
         : profile['is_active'] == true
-        ? 'Faol o‘quvchi'
+        ? t('Faol o‘quvchi', 'Активный ученик', 'Active student')
         : profile['is_active'] == false
-        ? 'Akkaunt nofaol'
-        : 'Akkaunt holati noma’lum';
+        ? t('Akkaunt nofaol', 'Аккаунт неактивен', 'Account inactive')
+        : t(
+            'Akkaunt holati noma’lum',
+            'Статус аккаунта неизвестен',
+            'Account status unknown',
+          );
     return _IdentityHeroShell(
       colors: [
         Sf.ink,
@@ -736,17 +1775,22 @@ class _StudentPassportHero extends StatelessWidget {
                 label: _initials(name),
                 icon: Icons.school_rounded,
                 accent: Colors.white,
+                compact: compact,
               ),
-              const SizedBox(width: 18),
+              SizedBox(width: compact ? 12 : 18),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const _HeroEyebrow(
+                    _HeroEyebrow(
                       icon: Icons.auto_awesome_rounded,
-                      text: 'STARFORGE STUDENT PASS',
+                      text: t(
+                        'STARFORGE O‘QUVCHI PASPORTI',
+                        'ПАСПОРТ УЧЕНИКА STARFORGE',
+                        'STARFORGE STUDENT PASS',
+                      ),
                     ),
-                    const SizedBox(height: 9),
+                    SizedBox(height: compact ? 5 : 9),
                     Text(
                       name,
                       maxLines: 2,
@@ -757,17 +1801,18 @@ class _StudentPassportHero extends StatelessWidget {
                             fontWeight: FontWeight.w400,
                             fontStyle: FontStyle.italic,
                             height: 1.05,
+                            fontSize: compact ? 21 : null,
                           ),
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: compact ? 5 : 8),
                     Text(
-                      'ID ${valueText(profile, const ['student_id'])}  •  ${valueText(profile, const ['academic_level'], fallback: 'Daraja belgilanmagan')}',
+                      'ID ${valueText(profile, const ['student_id'])}  •  ${valueText(profile, const ['academic_level'], fallback: t('Daraja belgilanmagan', 'Уровень не указан', 'Level not specified'))}',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.78),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    SizedBox(height: compact ? 9 : 14),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -781,8 +1826,16 @@ class _StudentPassportHero extends StatelessWidget {
                         _HeroChip(
                           icon: Icons.groups_2_outlined,
                           text: profile['current_cohort'] == null
-                              ? 'Guruh kutilmoqda'
-                              : 'Guruh biriktirilgan',
+                              ? t(
+                                  'Guruh kutilmoqda',
+                                  'Ожидается группа',
+                                  'Waiting for group',
+                                )
+                              : t(
+                                  'Guruh biriktirilgan',
+                                  'Группа назначена',
+                                  'Group assigned',
+                                ),
                         ),
                       ],
                     ),
@@ -793,13 +1846,14 @@ class _StudentPassportHero extends StatelessWidget {
           );
           final score = _HeroScore(
             value: '${(completeness * 100).round()}%',
-            label: 'profil tayyor',
+            label: t('profil tayyor', 'профиль готов', 'profile ready'),
             icon: Icons.verified_rounded,
+            compact: compact,
           );
           if (compact) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [identity, const SizedBox(height: 20), score],
+              children: [identity, const SizedBox(height: 12), score],
             );
           }
           return Row(
@@ -830,13 +1884,23 @@ class _ParentFamilyHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    String t(String uz, String ru, String en) =>
+        _identityText(context, uz, ru, en);
     final name = valueText(parent, const ['full_name'], fallback: fallbackName);
     final active = parent['is_active'] == true;
     final accountLabel = parent['is_active'] == true
-        ? 'Faol ota-ona kabineti'
+        ? t(
+            'Faol ota-ona kabineti',
+            'Активный кабинет родителя',
+            'Active parent account',
+          )
         : parent['is_active'] == false
-        ? 'Kabinet nofaol'
-        : 'Kabinet holati noma’lum';
+        ? t('Kabinet nofaol', 'Кабинет неактивен', 'Account inactive')
+        : t(
+            'Kabinet holati noma’lum',
+            'Статус кабинета неизвестен',
+            'Account status unknown',
+          );
     final scheme = Theme.of(context).colorScheme;
     return _IdentityHeroShell(
       colors: [
@@ -853,17 +1917,22 @@ class _ParentFamilyHero extends StatelessWidget {
                 label: _initials(name),
                 icon: Icons.family_restroom_rounded,
                 accent: Sf.accentSoft,
+                compact: compact,
               ),
-              const SizedBox(width: 18),
+              SizedBox(width: compact ? 12 : 18),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const _HeroEyebrow(
+                    _HeroEyebrow(
                       icon: Icons.home_rounded,
-                      text: 'STARFORGE FAMILY SPACE',
+                      text: t(
+                        'STARFORGE OILA MAKONI',
+                        'СЕМЕЙНОЕ ПРОСТРАНСТВО STARFORGE',
+                        'STARFORGE FAMILY SPACE',
+                      ),
                     ),
-                    const SizedBox(height: 9),
+                    SizedBox(height: compact ? 5 : 9),
                     Text(
                       name,
                       maxLines: 2,
@@ -874,19 +1943,26 @@ class _ParentFamilyHero extends StatelessWidget {
                             fontWeight: FontWeight.w400,
                             fontStyle: FontStyle.italic,
                             height: 1.05,
+                            fontSize: compact ? 21 : null,
                           ),
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: compact ? 5 : 8),
                     Text(
-                      valueText(parent, const [
-                        'workplace',
-                      ], fallback: 'Ish joyi ko‘rsatilmagan'),
+                      valueText(
+                        parent,
+                        const ['workplace'],
+                        fallback: t(
+                          'Ish joyi ko‘rsatilmagan',
+                          'Место работы не указано',
+                          'Workplace not specified',
+                        ),
+                      ),
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.76),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    SizedBox(height: compact ? 9 : 14),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -899,7 +1975,11 @@ class _ParentFamilyHero extends StatelessWidget {
                         ),
                         _HeroChip(
                           icon: Icons.child_care_rounded,
-                          text: '${children.length} farzand ulangan',
+                          text: t(
+                            '${children.length} farzand ulangan',
+                            'Подключено: ${children.length} ${_russianChildrenWord(children.length)}',
+                            '${children.length} ${children.length == 1 ? 'child' : 'children'} linked',
+                          ),
                         ),
                       ],
                     ),
@@ -910,14 +1990,15 @@ class _ParentFamilyHero extends StatelessWidget {
           );
           final score = _HeroScore(
             value: '${(profileCompleteness * 100).round()}%',
-            label: 'oila profili',
+            label: t('oila profili', 'семейный профиль', 'family profile'),
             icon: Icons.shield_outlined,
             subtitle: valueText(parent, const ['phone']),
+            compact: compact,
           );
           if (compact) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [identity, const SizedBox(height: 20), score],
+              children: [identity, const SizedBox(height: 12), score],
             );
           }
           return Row(
@@ -941,8 +2022,9 @@ class _IdentityHeroShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mobile = MediaQuery.sizeOf(context).width < 600;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(mobile ? 18 : 22),
       child: Stack(
         children: [
           Positioned.fill(
@@ -983,7 +2065,7 @@ class _IdentityHeroShell extends StatelessWidget {
               ),
             ),
           ),
-          Padding(padding: const EdgeInsets.all(20), child: child),
+          Padding(padding: EdgeInsets.all(mobile ? 14 : 20), child: child),
         ],
       ),
     );
@@ -995,11 +2077,13 @@ class _HeroAvatar extends StatelessWidget {
     required this.label,
     required this.icon,
     required this.accent,
+    this.compact = false,
   });
 
   final String label;
   final IconData icon;
   final Color accent;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -1007,8 +2091,8 @@ class _HeroAvatar extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         Container(
-          width: 68,
-          height: 68,
+          width: compact ? 52 : 68,
+          height: compact ? 52 : 68,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.14),
@@ -1023,6 +2107,7 @@ class _HeroAvatar extends StatelessWidget {
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
               color: Colors.white,
               fontWeight: FontWeight.w900,
+              fontSize: compact ? 18 : null,
             ),
           ),
         ),
@@ -1030,14 +2115,14 @@ class _HeroAvatar extends StatelessWidget {
           right: -3,
           bottom: -3,
           child: Container(
-            width: 30,
-            height: 30,
+            width: compact ? 24 : 30,
+            height: compact ? 24 : 30,
             decoration: BoxDecoration(
               color: accent,
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white, width: 2),
             ),
-            child: Icon(icon, color: Sf.accentInk, size: 17),
+            child: Icon(icon, color: Sf.accentInk, size: compact ? 14 : 17),
           ),
         ),
       ],
@@ -1095,11 +2180,15 @@ class _HeroChip extends StatelessWidget {
         children: [
           Icon(icon, size: 15, color: Colors.white),
           const SizedBox(width: 6),
-          Text(
-            text,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -1114,55 +2203,84 @@ class _HeroScore extends StatelessWidget {
     required this.label,
     required this.icon,
     this.subtitle,
+    this.compact = false,
   });
 
   final String value;
   final String label;
   final IconData icon;
   final String? subtitle;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.all(compact ? 10 : 14),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(compact ? 13 : 16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: Colors.white, size: 23),
-          const SizedBox(height: 14),
-          Text(
-            value,
-            style: Sf.monoStyle(
-              size: 21,
-              weight: FontWeight.w700,
-              color: Colors.white,
+      child: compact
+          ? Row(
+              children: [
+                Icon(icon, color: Colors.white, size: 19),
+                const SizedBox(width: 10),
+                Text(
+                  value,
+                  style: Sf.monoStyle(
+                    size: 17,
+                    weight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.74),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon, color: Colors.white, size: 23),
+                const SizedBox(height: 14),
+                Text(
+                  value,
+                  style: Sf.monoStyle(
+                    size: 21,
+                    weight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.74),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (subtitle != null && subtitle!.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Colors.white.withValues(alpha: 0.72),
+                    ),
+                  ),
+                ],
+              ],
             ),
-          ),
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.74),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          if (subtitle != null && subtitle!.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              subtitle!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.72),
-              ),
-            ),
-          ],
-        ],
-      ),
     );
   }
 }
@@ -1196,6 +2314,23 @@ class _IdentityMetricGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        if (constraints.maxWidth < 600) {
+          final textScale = MediaQuery.textScalerOf(
+            context,
+          ).scale(1).clamp(1.0, 2.0);
+          return SizedBox(
+            height: 128 + (textScale - 1) * 115,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: items.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) => SizedBox(
+                width: 148 + (textScale - 1) * 22,
+                child: _IdentityMetricCard(item: items[index], dense: true),
+              ),
+            ),
+          );
+        }
         final columns = constraints.maxWidth >= 1060 ? 4 : 2;
         const gap = 10.0;
         final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
@@ -1216,9 +2351,10 @@ class _IdentityMetricGrid extends StatelessWidget {
 }
 
 class _IdentityMetricCard extends StatelessWidget {
-  const _IdentityMetricCard({required this.item});
+  const _IdentityMetricCard({required this.item, this.dense = false});
 
   final _IdentityMetric item;
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
@@ -1230,7 +2366,7 @@ class _IdentityMetricCard extends StatelessWidget {
         onTap: item.onTap,
         borderRadius: BorderRadius.circular(16),
         child: Ink(
-          padding: const EdgeInsets.all(13),
+          padding: EdgeInsets.all(dense ? 10 : 13),
           decoration: BoxDecoration(
             color: colors.surface,
             borderRadius: BorderRadius.circular(16),
@@ -1242,13 +2378,17 @@ class _IdentityMetricCard extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    width: 32,
-                    height: 32,
+                    width: dense ? 28 : 32,
+                    height: dense ? 28 : 32,
                     decoration: BoxDecoration(
                       color: item.accent.withValues(alpha: 0.13),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Icon(item.icon, color: item.accent, size: 17),
+                    child: Icon(
+                      item.icon,
+                      color: item.accent,
+                      size: dense ? 15 : 17,
+                    ),
                   ),
                   const Spacer(),
                   if (item.onTap != null)
@@ -1259,25 +2399,27 @@ class _IdentityMetricCard extends StatelessWidget {
                     ),
                 ],
               ),
-              const SizedBox(height: 11),
+              SizedBox(height: dense ? 6 : 11),
               Text(
                 item.value,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Sf.monoStyle(
-                  size: 19,
+                  size: dense ? 17 : 19,
                   weight: FontWeight.w700,
                   color: colors.onSurface,
                 ),
               ),
-              const SizedBox(height: 5),
+              SizedBox(height: dense ? 3 : 5),
               Text(
                 item.label.toUpperCase(),
-                maxLines: 1,
+                maxLines: dense ? 2 : 1,
                 overflow: TextOverflow.ellipsis,
-                style: Sf.eyebrow(color: colors.onSurfaceVariant),
+                style: Sf.eyebrow(
+                  color: colors.onSurfaceVariant,
+                ).copyWith(fontSize: dense ? 9.5 : null),
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: dense ? 2 : 4),
               Text(
                 item.detail,
                 maxLines: 2,
@@ -1287,7 +2429,7 @@ class _IdentityMetricCard extends StatelessWidget {
                   height: 1.3,
                 ),
               ),
-              if (progress != null) ...[
+              if (progress != null && !dense) ...[
                 const SizedBox(height: 13),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(99),
@@ -1325,39 +2467,48 @@ class _IdentitySectionHeading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final mobile = MediaQuery.sizeOf(context).width < 600;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 46,
-          height: 46,
+          width: mobile ? 36 : 46,
+          height: mobile ? 36 : 46,
           decoration: BoxDecoration(
             color: colors.primaryContainer,
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(mobile ? 11 : 15),
           ),
-          child: Icon(icon, color: colors.onPrimaryContainer),
+          child: Icon(
+            icon,
+            color: colors.onPrimaryContainer,
+            size: mobile ? 19 : 24,
+          ),
         ),
-        const SizedBox(width: 13),
+        SizedBox(width: mobile ? 10 : 13),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 overline,
+                maxLines: mobile ? 2 : 1,
+                overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: colors.primary,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 1.15,
                 ),
               ),
-              const SizedBox(height: 3),
+              SizedBox(height: mobile ? 1 : 3),
               Text(
                 title,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                style:
+                    (mobile
+                            ? Theme.of(context).textTheme.titleMedium
+                            : Theme.of(context).textTheme.titleLarge)
+                        ?.copyWith(fontWeight: FontWeight.w900),
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: mobile ? 2 : 4),
               Text(
                 description,
                 style: Theme.of(
@@ -1367,7 +2518,7 @@ class _IdentitySectionHeading extends StatelessWidget {
             ],
           ),
         ),
-        if (count != null) ...[
+        if (count != null && !mobile) ...[
           const SizedBox(width: 12),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
@@ -1376,7 +2527,7 @@ class _IdentitySectionHeading extends StatelessWidget {
               borderRadius: BorderRadius.circular(99),
             ),
             child: Text(
-              '$count ta',
+              _identityCount(context, count!),
               style: Theme.of(
                 context,
               ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
@@ -1384,6 +2535,85 @@ class _IdentitySectionHeading extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _IdentityDisclosureCard extends StatelessWidget {
+  const _IdentityDisclosureCard({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.accent,
+    required this.child,
+    this.count,
+    this.initiallyExpanded = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+  final Color accent;
+  final Widget child;
+  final int? count;
+  final bool initiallyExpanded;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final mobile = MediaQuery.sizeOf(context).width < 600;
+    return Material(
+      color: colors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: accent.withValues(alpha: 0.2)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: initiallyExpanded,
+          tilePadding: EdgeInsets.symmetric(
+            horizontal: mobile ? 11 : 14,
+            vertical: mobile ? 3 : 5,
+          ),
+          childrenPadding: EdgeInsets.fromLTRB(
+            mobile ? 11 : 14,
+            0,
+            mobile ? 11 : 14,
+            mobile ? 12 : 15,
+          ),
+          leading: Container(
+            width: mobile ? 36 : 42,
+            height: mobile ? 36 : 42,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.11),
+              borderRadius: BorderRadius.circular(mobile ? 11 : 14),
+            ),
+            child: Icon(icon, color: accent, size: mobile ? 19 : 22),
+          ),
+          title: Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Text(
+              count == null
+                  ? description
+                  : '$description · ${_identityCount(context, count!)}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+                height: 1.3,
+              ),
+            ),
+          ),
+          children: [child],
+        ),
+      ),
     );
   }
 }
@@ -1429,10 +2659,15 @@ class _IdentityInformationPanel extends StatelessWidget {
           spacing: gap,
           runSpacing: gap,
           children: [
-            for (final group in groups)
+            for (var index = 0; index < groups.length; index++)
               SizedBox(
                 width: width,
-                child: _IdentityInfoGroupCard(group: group, accent: accent),
+                child: _IdentityInfoGroupCard(
+                  key: ValueKey('identity-info-group-${groups[index].title}'),
+                  group: groups[index],
+                  accent: accent,
+                  initiallyExpanded: columns > 1 || index == 0,
+                ),
               ),
           ],
         );
@@ -1442,53 +2677,78 @@ class _IdentityInformationPanel extends StatelessWidget {
 }
 
 class _IdentityInfoGroupCard extends StatelessWidget {
-  const _IdentityInfoGroupCard({required this.group, required this.accent});
+  const _IdentityInfoGroupCard({
+    super.key,
+    required this.group,
+    required this.accent,
+    required this.initiallyExpanded,
+  });
 
   final _IdentityInfoGroup group;
   final Color accent;
+  final bool initiallyExpanded;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colors.surface,
+    final mobile = MediaQuery.sizeOf(context).width < 600;
+    return Material(
+      color: colors.surface,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.outlineVariant),
+        side: BorderSide(color: colors.outlineVariant),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.11),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(group.icon, color: accent, size: 20),
-              ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Text(
-                  group.title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
+      clipBehavior: Clip.antiAlias,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          key: PageStorageKey<String>('identity-group-${group.title}'),
+          initiallyExpanded: initiallyExpanded,
+          maintainState: true,
+          tilePadding: EdgeInsets.symmetric(
+            horizontal: mobile ? 11 : 14,
+            vertical: mobile ? 2 : 4,
           ),
-          const SizedBox(height: 18),
-          for (var index = 0; index < group.fields.length; index++) ...[
-            _IdentityDataRow(field: group.fields[index], accent: accent),
-            if (index != group.fields.length - 1)
-              const Divider(height: 19, indent: 35),
+          childrenPadding: EdgeInsets.fromLTRB(
+            mobile ? 11 : 14,
+            0,
+            mobile ? 11 : 14,
+            mobile ? 11 : 14,
+          ),
+          leading: Container(
+            width: mobile ? 30 : 36,
+            height: mobile ? 30 : 36,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.11),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(group.icon, color: accent, size: mobile ? 17 : 20),
+          ),
+          title: Text(
+            group.title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          subtitle: Text(
+            _identityText(
+              context,
+              '${group.fields.length} ta maydon',
+              '${group.fields.length} ${_russianFieldWord(group.fields.length)}',
+              '${group.fields.length} ${group.fields.length == 1 ? 'field' : 'fields'}',
+            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+          ),
+          children: [
+            for (var index = 0; index < group.fields.length; index++) ...[
+              _IdentityDataRow(field: group.fields[index], accent: accent),
+              if (index != group.fields.length - 1)
+                Divider(height: mobile ? 13 : 19, indent: mobile ? 27 : 35),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -1503,14 +2763,15 @@ class _IdentityDataRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final mobile = MediaQuery.sizeOf(context).width < 600;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 2),
-          child: Icon(field.icon, size: 19, color: accent),
+          child: Icon(field.icon, size: mobile ? 16 : 19, color: accent),
         ),
-        const SizedBox(width: 14),
+        SizedBox(width: mobile ? 10 : 14),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1550,51 +2811,77 @@ class _StudentReadinessPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    String t(String uz, String ru, String en) =>
+        _identityText(context, uz, ru, en);
     final checks = [
       (
-        'Shaxsiy aloqa',
+        t('Shaxsiy aloqa', 'Личные контакты', 'Personal contact'),
         _filled(profile['phone']) && _filled(profile['email']),
         Icons.contact_phone_outlined,
       ),
       (
-        'Guruh biriktiruvi',
+        t('Guruh biriktiruvi', 'Назначение группы', 'Group assignment'),
         _filled(profile['current_cohort']),
         Icons.groups_2_outlined,
       ),
       (
-        'Ta’lim tarixi',
+        t('Ta’lim tarixi', 'История обучения', 'Education history'),
         _filled(profile['previous_school']),
         Icons.history_edu_outlined,
       ),
       (
-        'Hudud ma’lumoti',
+        t('Hudud ma’lumoti', 'Данные о регионе', 'Region information'),
         _filled(profile['location']),
         Icons.location_on_outlined,
       ),
     ];
     final bars = [
       _PortalBarDatum(
-        label: 'Shaxsiy ma’lumotlar',
+        label: t(
+          'Shaxsiy ma’lumotlar',
+          'Личные данные',
+          'Personal information',
+        ),
         value: completeness * 100,
-        detail: 'Telefon, email, tug‘ilgan sana va hudud asosida.',
+        detail: t(
+          'Telefon, email, tug‘ilgan sana va hudud asosida.',
+          'На основе телефона, email, даты рождения и региона.',
+          'Based on phone, email, date of birth, and region.',
+        ),
         color: accent,
         icon: Icons.person_outline_rounded,
       ),
       _PortalBarDatum(
-        label: 'O‘quv holati',
+        label: t('O‘quv holati', 'Статус обучения', 'Learning status'),
         value: profile['current_cohort'] == null ? 35 : 100,
         detail: profile['current_cohort'] == null
-            ? 'Joriy guruh hali biriktirilmagan.'
-            : 'O‘quvchi guruhga to‘liq biriktirilgan.',
+            ? t(
+                'Joriy guruh hali biriktirilmagan.',
+                'Текущая группа ещё не назначена.',
+                'No current group has been assigned yet.',
+              )
+            : t(
+                'O‘quvchi guruhga to‘liq biriktirilgan.',
+                'Ученик полностью привязан к группе.',
+                'The student is fully assigned to a group.',
+              ),
         color: Theme.of(context).colorScheme.secondary,
         icon: Icons.school_outlined,
       ),
       _PortalBarDatum(
-        label: 'Akkaunt faolligi',
+        label: t('Akkaunt faolligi', 'Активность аккаунта', 'Account activity'),
         value: profile['is_blocked'] == true ? 0 : 100,
         detail: profile['is_blocked'] == true
-            ? 'Markaz akkauntga cheklov qo‘ygan.'
-            : 'Akkaunt faol va ruxsatli xizmatlar ochiq.',
+            ? t(
+                'Markaz akkauntga cheklov qo‘ygan.',
+                'Центр ограничил аккаунт.',
+                'The center has restricted the account.',
+              )
+            : t(
+                'Akkaunt faol va ruxsatli xizmatlar ochiq.',
+                'Аккаунт активен, а разрешённые сервисы доступны.',
+                'The account is active and permitted services are available.',
+              ),
         color: Sf.success,
         icon: Icons.shield_outlined,
       ),
@@ -1604,16 +2891,23 @@ class _StudentReadinessPanel extends StatelessWidget {
         final compact = constraints.maxWidth < 760;
         final ring = _InteractiveRingChart(
           value: completeness,
-          label: 'Tayyorlik',
-          detail:
-              'Asosiy profil maydonlarining ${(completeness * 100).round()}% qismi serverda to‘ldirilgan.',
+          label: t('Tayyorlik', 'Готовность', 'Readiness'),
+          detail: t(
+            'Asosiy profil maydonlarining ${(completeness * 100).round()}% qismi serverda to‘ldirilgan.',
+            'На сервере заполнено ${(completeness * 100).round()}% основных полей профиля.',
+            '${(completeness * 100).round()}% of the core profile fields are completed on the server.',
+          ),
           color: accent,
           centerIcon: Icons.badge_outlined,
           size: compact ? 106 : 120,
         );
         final checklist = _ProfileChecklist(checks: checks, accent: accent);
         final chart = _CompactBarChart(
-          title: 'Profil va o‘qishga tayyorlik',
+          title: t(
+            'Profil va o‘qishga tayyorlik',
+            'Готовность профиля и к обучению',
+            'Profile and learning readiness',
+          ),
           items: bars,
         );
         if (compact) {
@@ -1661,17 +2955,27 @@ class _StudentScopeBreakdown extends StatelessWidget {
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 760;
         final status = _IdentityDistributionCard(
-          title: 'Statuslar',
-          subtitle: 'O‘quvchi holati bo‘yicha',
+          title: _identityText(context, 'Statuslar', 'Статусы', 'Statuses'),
+          subtitle: _identityText(
+            context,
+            'O‘quvchi holati bo‘yicha',
+            'По статусу ученика',
+            'By student status',
+          ),
           icon: Icons.donut_large_outlined,
           accent: colors.primary,
           entries: statusEntries,
           total: total,
-          transformLabel: _statusLabel,
+          transformLabel: (value) => _identityStatusLabel(context, value),
         );
         final branches = _IdentityDistributionCard(
-          title: 'Filiallar',
-          subtitle: 'Ko‘rinadigan profillar kesimi',
+          title: _identityText(context, 'Filiallar', 'Филиалы', 'Branches'),
+          subtitle: _identityText(
+            context,
+            'Ko‘rinadigan profillar kesimi',
+            'Срез доступных профилей',
+            'Visible profile breakdown',
+          ),
           icon: Icons.apartment_rounded,
           accent: colors.secondary,
           entries: branchEntries,
@@ -1767,7 +3071,12 @@ class _IdentityDistributionCard extends StatelessWidget {
           const SizedBox(height: 18),
           if (entries.isEmpty)
             Text(
-              'Taqsimot ma’lumoti mavjud emas',
+              _identityText(
+                context,
+                'Taqsimot ma’lumoti mavjud emas',
+                'Данные распределения отсутствуют',
+                'Distribution data is unavailable',
+              ),
               style: TextStyle(color: colors.onSurfaceVariant),
             )
           else
@@ -1812,7 +3121,12 @@ class _DistributionRow extends StatelessWidget {
     final ratio = total <= 0 ? 0.0 : (value / total).clamp(0.0, 1.0);
     final colors = Theme.of(context).colorScheme;
     return Semantics(
-      label: '$label: ${value.round()}, ${(ratio * 100).round()} foiz',
+      label: _identityText(
+        context,
+        '$label: ${value.round()}, ${(ratio * 100).round()} foiz',
+        '$label: ${value.round()}, ${(ratio * 100).round()} процентов',
+        '$label: ${value.round()}, ${(ratio * 100).round()} percent',
+      ),
       child: Column(
         children: [
           Row(
@@ -1887,13 +3201,23 @@ class _EmergencyContactPanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Favqulodda kontaktlar',
+                      _identityText(
+                        context,
+                        'Favqulodda kontaktlar',
+                        'Экстренные контакты',
+                        'Emergency contacts',
+                      ),
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w900,
                       ),
                     ),
                     Text(
-                      '${contacts.length} ta server yozuvi',
+                      _identityText(
+                        context,
+                        '${contacts.length} ta server yozuvi',
+                        '${contacts.length} ${_russianRecordWord(contacts.length)} сервера',
+                        '${contacts.length} server ${contacts.length == 1 ? 'record' : 'records'}',
+                      ),
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: colors.onSurfaceVariant,
                       ),
@@ -1947,11 +3271,16 @@ class _EmergencyContactCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final name = valueText(contact, const [
-      'full_name',
-      'name',
-      'contact_name',
-    ], fallback: 'Kontakt ${index + 1}');
+    final name = valueText(
+      contact,
+      const ['full_name', 'name', 'contact_name'],
+      fallback: _identityText(
+        context,
+        'Kontakt ${index + 1}',
+        'Контакт ${index + 1}',
+        'Contact ${index + 1}',
+      ),
+    );
     final phone = valueText(contact, const ['phone', 'phone_number', 'mobile']);
     final relation = valueText(contact, const [
       'relationship',
@@ -1990,7 +3319,7 @@ class _EmergencyContactCard extends StatelessWidget {
                 ),
                 if (relation != '—')
                   Text(
-                    _relationshipLabel(relation),
+                    _relationshipLabel(context, relation),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: colors.onSurfaceVariant,
                     ),
@@ -2112,7 +3441,12 @@ class _ProfileChecklist extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Tezkor tekshiruv',
+            _identityText(
+              context,
+              'Tezkor tekshiruv',
+              'Быстрая проверка',
+              'Quick check',
+            ),
             style: Theme.of(
               context,
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
@@ -2315,7 +3649,12 @@ class _ChildSwitcher extends StatelessWidget {
                 Icon(Icons.swap_horiz_rounded, color: colors.primary, size: 20),
                 const SizedBox(width: 8),
                 Text(
-                  'Farzand profilini almashtirish',
+                  _identityText(
+                    context,
+                    'Farzand profilini almashtirish',
+                    'Сменить профиль ребёнка',
+                    'Switch child profile',
+                  ),
                   style: Theme.of(
                     context,
                   ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
@@ -2480,7 +3819,7 @@ class _ChildSpotlightCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${valueText(child, const ['student_id'])} · ${_ageLabel(child['birthdate'])}',
+                      '${valueText(child, const ['student_id'])} · ${_ageLabel(context, child['birthdate'])}',
                       style: TextStyle(color: colors.onSurfaceVariant),
                     ),
                     const SizedBox(height: 9),
@@ -2495,8 +3834,18 @@ class _ChildSpotlightCard extends StatelessWidget {
                         ),
                         _SoftStatusBadge(
                           text: child['current_cohort'] == null
-                              ? 'Guruhsiz'
-                              : 'Guruh biriktirilgan',
+                              ? _identityText(
+                                  context,
+                                  'Guruhsiz',
+                                  'Без группы',
+                                  'No group',
+                                )
+                              : _identityText(
+                                  context,
+                                  'Guruh biriktirilgan',
+                                  'Группа назначена',
+                                  'Group assigned',
+                                ),
                           icon: Icons.groups_2_outlined,
                           positive: child['current_cohort'] != null,
                         ),
@@ -2514,7 +3863,6 @@ class _ChildSpotlightCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(18),
             ),
             child: Row(
-              mainAxisSize: MainAxisSize.min,
               children: [
                 SizedBox(
                   width: 36,
@@ -2527,21 +3875,34 @@ class _ChildSpotlightCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 11),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${(completeness * 100).round()}%',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        color: accent,
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${(completeness * 100).round()}%',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              color: accent,
+                            ),
                       ),
-                    ),
-                    Text(
-                      'profil to‘liq',
-                      style: Theme.of(context).textTheme.labelSmall,
-                    ),
-                  ],
+                      Text(
+                        _identityText(
+                          context,
+                          'profil to‘liq',
+                          'профиль заполнен',
+                          'profile complete',
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -2591,11 +3952,15 @@ class _SoftStatusBadge extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: color),
           const SizedBox(width: 5),
-          Text(
-            _statusLabel(text),
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w800,
+          Flexible(
+            child: Text(
+              _identityStatusLabel(context, text),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ],
@@ -2617,57 +3982,59 @@ class _ParentIdentityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    String t(String uz, String ru, String en) =>
+        _identityText(context, uz, ru, en);
     final accent = Theme.of(context).colorScheme.primary;
     final name = valueText(parent, const ['full_name'], fallback: fallbackName);
     final fields = [
       _IdentityField(
         Icons.phone_iphone_rounded,
-        'Telefon',
+        t('Telefon', 'Телефон', 'Phone'),
         valueText(parent, const ['phone']),
       ),
       _IdentityField(
         Icons.alternate_email_rounded,
-        'Email',
+        t('Email', 'Email', 'Email'),
         valueText(parent, const ['email']),
       ),
       _IdentityField(
         Icons.work_outline_rounded,
-        'Ish joyi',
+        t('Ish joyi', 'Место работы', 'Workplace'),
         valueText(parent, const ['workplace']),
       ),
       _IdentityField(
         Icons.cake_outlined,
-        'Tug‘ilgan sana',
+        t('Tug‘ilgan sana', 'Дата рождения', 'Date of birth'),
         _dateLabel(parent['birthdate']),
       ),
       _IdentityField(
         Icons.wc_outlined,
-        'Jins',
-        _genderLabel('${parent['gender'] ?? ''}'),
+        t('Jins', 'Пол', 'Gender'),
+        _genderLabel(context, '${parent['gender'] ?? ''}'),
       ),
       _IdentityField(
         Icons.login_rounded,
-        'Oxirgi kirish',
+        t('Oxirgi kirish', 'Последний вход', 'Last sign-in'),
         _dateLabel(parent['last_login_at'], time: true),
       ),
       _IdentityField(
         Icons.alternate_email_rounded,
-        'Login',
+        t('Login', 'Логин', 'Username'),
         valueText(parent, const ['username']),
       ),
       _IdentityField(
         Icons.power_settings_new_rounded,
-        'Akkaunt holati',
-        _activeAccountLabel(parent['is_active']),
+        t('Akkaunt holati', 'Статус аккаунта', 'Account status'),
+        _activeAccountLabel(context, parent['is_active']),
       ),
       _IdentityField(
         Icons.password_rounded,
-        'Parol holati',
-        _passwordStateLabel(parent['must_change_password']),
+        t('Parol holati', 'Статус пароля', 'Password status'),
+        _passwordStateLabel(context, parent['must_change_password']),
       ),
       _IdentityField(
         Icons.event_outlined,
-        'Profil yaratilgan',
+        t('Profil yaratilgan', 'Профиль создан', 'Profile created'),
         _dateLabel(parent['created_at'], time: true),
       ),
     ];
@@ -2710,7 +4077,11 @@ class _ParentIdentityCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          'Tasdiqlangan kabinet egasi',
+                          t(
+                            'Tasdiqlangan kabinet egasi',
+                            'Подтверждённый владелец кабинета',
+                            'Verified account owner',
+                          ),
                           style: TextStyle(color: colors.onSurfaceVariant),
                         ),
                       ],
@@ -2785,6 +4156,8 @@ class _FamilySafetyOverview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    String t(String uz, String ru, String en) =>
+        _identityText(context, uz, ru, en);
     final activePickups = pickups.where((item) => item['is_active'] == true);
     final hasPrimary = guardians.any((item) => item['is_primary'] == true);
     final accountReady =
@@ -2796,41 +4169,87 @@ class _FamilySafetyOverview extends StatelessWidget {
         icon: accountReady
             ? Icons.verified_user_rounded
             : Icons.gpp_maybe_outlined,
-        title: 'O‘quvchi akkaunti',
-        value: accountReady ? 'Himoyalangan' : 'E’tibor talab qiladi',
+        title: t('O‘quvchi akkaunti', 'Аккаунт ученика', 'Student account'),
+        value: accountReady
+            ? t('Himoyalangan', 'Защищён', 'Protected')
+            : t('E’tibor talab qiladi', 'Требует внимания', 'Needs attention'),
         description: child['is_blocked'] == true
-            ? valueText(child, const [
-                'block_reason',
-              ], fallback: 'Akkaunt markaz tomonidan cheklangan.')
+            ? valueText(
+                child,
+                const ['block_reason'],
+                fallback: t(
+                  'Akkaunt markaz tomonidan cheklangan.',
+                  'Аккаунт ограничен центром.',
+                  'The account was restricted by the center.',
+                ),
+              )
             : child['is_active'] == false
-            ? 'O‘quvchi akkaunti hozir nofaol.'
+            ? t(
+                'O‘quvchi akkaunti hozir nofaol.',
+                'Аккаунт ученика сейчас неактивен.',
+                'The student account is currently inactive.',
+              )
             : child['must_change_password'] == true
-            ? 'Birinchi kirishda parolni almashtirish kerak.'
+            ? t(
+                'Birinchi kirishda parolni almashtirish kerak.',
+                'При первом входе нужно сменить пароль.',
+                'The password must be changed on first sign-in.',
+              )
             : accountReady
-            ? 'Kirish holati va parol talablari joyida.'
-            : 'Akkaunt holati bo‘yicha to‘liq ma’lumot mavjud emas.',
+            ? t(
+                'Kirish holati va parol talablari joyida.',
+                'Статус доступа и требования к паролю в порядке.',
+                'Access status and password requirements are in order.',
+              )
+            : t(
+                'Akkaunt holati bo‘yicha to‘liq ma’lumot mavjud emas.',
+                'Полные данные о статусе аккаунта отсутствуют.',
+                'Complete account status information is unavailable.',
+              ),
         ok: accountReady,
       ),
       (
         icon: hasPrimary
             ? Icons.family_restroom_rounded
             : Icons.person_search_outlined,
-        title: 'Asosiy vakil',
-        value: hasPrimary ? 'Tasdiqlangan' : 'Belgilanmagan',
+        title: t('Asosiy vakil', 'Основной представитель', 'Primary guardian'),
+        value: hasPrimary
+            ? t('Tasdiqlangan', 'Подтверждён', 'Verified')
+            : t('Belgilanmagan', 'Не назначен', 'Not assigned'),
         description: guardians.isEmpty
-            ? 'Farzandga rasmiy vakil yozuvi bog‘lanmagan.'
-            : '${guardians.length} ta vakillik yozuvi mavjud.',
+            ? t(
+                'Farzandga rasmiy vakil yozuvi bog‘lanmagan.',
+                'К ребёнку не привязана запись об официальном представителе.',
+                'No official guardian record is linked to the child.',
+              )
+            : t(
+                '${guardians.length} ta vakillik yozuvi mavjud.',
+                'Доступно ${guardians.length} ${_russianRecordWord(guardians.length)} о представителях.',
+                '${guardians.length} guardian ${guardians.length == 1 ? 'record is' : 'records are'} available.',
+              ),
         ok: hasPrimary,
       ),
       (
         icon: activePickups.isNotEmpty
             ? Icons.how_to_reg_rounded
             : Icons.person_off_outlined,
-        title: 'Olib ketish',
-        value: '${activePickups.length} ta faol',
+        title: t('Olib ketish', 'Получение ребёнка', 'Pickup'),
+        value: t(
+          '${activePickups.length} ta faol',
+          'Активных: ${activePickups.length}',
+          '${activePickups.length} active',
+        ),
         description: pickups.isEmpty
-            ? 'Olib ketish uchun ruxsatnoma kiritilmagan.'
-            : '${pickups.length} ta ruxsat yozuvi tekshirildi.',
+            ? t(
+                'Olib ketish uchun ruxsatnoma kiritilmagan.',
+                'Разрешения на получение ребёнка не добавлены.',
+                'No pickup permits have been added.',
+              )
+            : t(
+                '${pickups.length} ta ruxsat yozuvi tekshirildi.',
+                'Проверено ${pickups.length} ${_russianRecordWord(pickups.length)} о разрешениях.',
+                '${pickups.length} permit ${pickups.length == 1 ? 'record was' : 'records were'} checked.',
+              ),
         ok: activePickups.isNotEmpty,
       ),
     ];
@@ -3089,14 +4508,24 @@ class _GuardianCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      _relationshipLabel('${row['relationship'] ?? ''}'),
+                      _relationshipLabel(
+                        context,
+                        '${row['relationship'] ?? ''}',
+                      ),
                       style: TextStyle(color: colors.onSurfaceVariant),
                     ),
                   ],
                 ),
               ),
               _SoftStatusBadge(
-                text: primary ? 'Asosiy' : 'Qo‘shimcha',
+                text: primary
+                    ? _identityText(context, 'Asosiy', 'Основной', 'Primary')
+                    : _identityText(
+                        context,
+                        'Qo‘shimcha',
+                        'Дополнительный',
+                        'Additional',
+                      ),
                 icon: primary
                     ? Icons.star_rounded
                     : Icons.person_outline_rounded,
@@ -3107,17 +4536,29 @@ class _GuardianCard extends StatelessWidget {
           const SizedBox(height: 14),
           _LabeledLine(
             icon: Icons.child_care_outlined,
-            label: 'Farzand',
+            label: _identityText(context, 'Farzand', 'Ребёнок', 'Child'),
             value: valueText(row, const ['student_name']),
           ),
-          if (_filled(row['custody_notes'])) ...[
-            const SizedBox(height: 9),
-            _LabeledLine(
-              icon: Icons.gavel_outlined,
-              label: 'Rasmiy izoh',
-              value: '${row['custody_notes']}',
+          const SizedBox(height: 9),
+          _LabeledLine(
+            icon: Icons.gavel_outlined,
+            label: _identityText(
+              context,
+              'Rasmiy izoh',
+              'Официальное примечание',
+              'Official note',
             ),
-          ],
+            value: valueText(
+              row,
+              const ['custody_notes'],
+              fallback: _identityText(
+                context,
+                'Izoh kiritilmagan',
+                'Примечание не добавлено',
+                'No note provided',
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -3194,7 +4635,19 @@ class _PickupPermitCard extends StatelessWidget {
               ),
               const Spacer(),
               _SoftStatusBadge(
-                text: active ? 'Ruxsat bor' : 'Bekor qilingan',
+                text: active
+                    ? _identityText(
+                        context,
+                        'Ruxsat bor',
+                        'Разрешено',
+                        'Permitted',
+                      )
+                    : _identityText(
+                        context,
+                        'Bekor qilingan',
+                        'Отменено',
+                        'Cancelled',
+                      ),
                 icon: active ? Icons.check_circle_rounded : Icons.block_rounded,
                 positive: active,
               ),
@@ -3211,27 +4664,32 @@ class _PickupPermitCard extends StatelessWidget {
           ),
           const SizedBox(height: 3),
           Text(
-            _relationshipLabel('${row['relationship'] ?? ''}'),
+            _relationshipLabel(context, '${row['relationship'] ?? ''}'),
             style: TextStyle(color: colors.onSurfaceVariant),
           ),
           if (_filled(row['student_name'])) ...[
             const SizedBox(height: 11),
             _LabeledLine(
               icon: Icons.child_care_outlined,
-              label: 'Farzand',
+              label: _identityText(context, 'Farzand', 'Ребёнок', 'Child'),
               value: '${row['student_name']}',
             ),
           ],
           const SizedBox(height: 14),
           _LabeledLine(
             icon: Icons.phone_outlined,
-            label: 'Telefon',
+            label: _identityText(context, 'Telefon', 'Телефон', 'Phone'),
             value: valueText(row, const ['phone']),
           ),
           const SizedBox(height: 8),
           _LabeledLine(
             icon: Icons.event_outlined,
-            label: 'Ruxsat yaratilgan',
+            label: _identityText(
+              context,
+              'Ruxsat yaratilgan',
+              'Разрешение создано',
+              'Permit created',
+            ),
             value: _dateLabel(row['created_at']),
           ),
         ],
@@ -3327,8 +4785,8 @@ class _TimelineEntry extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final from = _statusLabel('${event['from_status'] ?? ''}');
-    final to = _statusLabel('${event['to_status'] ?? ''}');
+    final from = _identityStatusLabel(context, '${event['from_status'] ?? ''}');
+    final to = _identityStatusLabel(context, '${event['to_status'] ?? ''}');
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3381,7 +4839,14 @@ class _TimelineEntry extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            from.isEmpty || from == 'Noma’lum'
+                            from.isEmpty ||
+                                    from ==
+                                        _identityText(
+                                          context,
+                                          'Noma’lum',
+                                          'Неизвестно',
+                                          'Unknown',
+                                        )
                                 ? to
                                 : '$from  →  $to',
                             style: Theme.of(context).textTheme.titleSmall
@@ -3390,7 +4855,12 @@ class _TimelineEntry extends StatelessWidget {
                         ),
                         if (latest)
                           Text(
-                            'SO‘NGGI',
+                            _identityText(
+                              context,
+                              'SO‘NGGI',
+                              'ПОСЛЕДНЕЕ',
+                              'LATEST',
+                            ),
                             style: Theme.of(context).textTheme.labelSmall
                                 ?.copyWith(
                                   color: accent,
@@ -3405,7 +4875,12 @@ class _TimelineEntry extends StatelessWidget {
                       valueText(
                         event,
                         const ['note'],
-                        fallback: 'Profil holati markaz tomonidan yangilandi.',
+                        fallback: _identityText(
+                          context,
+                          'Profil holati markaz tomonidan yangilandi.',
+                          'Статус профиля обновлён центром.',
+                          'The profile status was updated by the center.',
+                        ),
                       ),
                       style: TextStyle(color: colors.onSurfaceVariant),
                     ),
@@ -3450,9 +4925,15 @@ class _TimelineMeta extends StatelessWidget {
       children: [
         Icon(icon, size: 14, color: color),
         const SizedBox(width: 5),
-        Text(
-          text,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color),
+        Flexible(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: color),
+          ),
         ),
       ],
     );
@@ -3475,25 +4956,29 @@ class _IdentityEmptyPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final mobile = MediaQuery.sizeOf(context).width < 600;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      padding: EdgeInsets.symmetric(
+        horizontal: mobile ? 12 : 16,
+        vertical: mobile ? 12 : 18,
+      ),
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(mobile ? 14 : 16),
         border: Border.all(color: accent.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
           Container(
-            width: 52,
-            height: 52,
+            width: mobile ? 38 : 52,
+            height: mobile ? 38 : 52,
             decoration: BoxDecoration(
               color: accent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(17),
+              borderRadius: BorderRadius.circular(mobile ? 12 : 17),
             ),
-            child: Icon(icon, color: accent, size: 27),
+            child: Icon(icon, color: accent, size: mobile ? 20 : 27),
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: mobile ? 11 : 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -3504,8 +4989,13 @@ class _IdentityEmptyPanel extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(message, style: TextStyle(color: colors.onSurfaceVariant)),
+                SizedBox(height: mobile ? 2 : 4),
+                Text(
+                  message,
+                  maxLines: mobile ? 3 : null,
+                  overflow: mobile ? TextOverflow.ellipsis : null,
+                  style: TextStyle(color: colors.onSurfaceVariant),
+                ),
               ],
             ),
           ),
@@ -3569,37 +5059,79 @@ bool _filled(Object? value) {
 bool _hasEmergencyContacts(Map<String, Object?> profile) =>
     _filled(profile['emergency_contacts']);
 
-String _availability(Object? value) =>
-    _filled(value) ? 'Kiritilgan' : 'Kutilmoqda';
+String _availability(BuildContext context, Object? value) => _filled(value)
+    ? _identityText(context, 'Kiritilgan', 'Указано', 'Provided')
+    : _identityText(context, 'Kutilmoqda', 'Ожидается', 'Pending');
 
-String _activeAccountLabel(Object? raw) => switch (raw) {
-  true => 'Faol',
-  false => 'Nofaol',
-  _ => 'Ma’lumot mavjud emas',
+String _activeAccountLabel(BuildContext context, Object? raw) => switch (raw) {
+  true => _identityText(context, 'Faol', 'Активен', 'Active'),
+  false => _identityText(context, 'Nofaol', 'Неактивен', 'Inactive'),
+  _ => _identityText(
+    context,
+    'Ma’lumot mavjud emas',
+    'Данные отсутствуют',
+    'Information unavailable',
+  ),
 };
 
-String _passwordStateLabel(Object? raw) => switch (raw) {
-  true => 'Almashtirish talab qilinadi',
-  false => 'Almashtirish talab qilinmaydi',
-  _ => 'Ma’lumot mavjud emas',
+String _passwordStateLabel(BuildContext context, Object? raw) => switch (raw) {
+  true => _identityText(
+    context,
+    'Almashtirish talab qilinadi',
+    'Требуется смена',
+    'Change required',
+  ),
+  false => _identityText(
+    context,
+    'Almashtirish talab qilinmaydi',
+    'Смена не требуется',
+    'No change required',
+  ),
+  _ => _identityText(
+    context,
+    'Ma’lumot mavjud emas',
+    'Данные отсутствуют',
+    'Information unavailable',
+  ),
 };
 
-String _genderLabel(String value) => switch (value.toLowerCase()) {
-  'male' || 'm' => 'Erkak',
-  'female' || 'f' => 'Ayol',
-  _ => value.trim().isEmpty ? '—' : value,
-};
+String _genderLabel(BuildContext context, String value) =>
+    switch (value.toLowerCase()) {
+      'male' || 'm' => _identityText(context, 'Erkak', 'Мужской', 'Male'),
+      'female' || 'f' => _identityText(context, 'Ayol', 'Женский', 'Female'),
+      _ => value.trim().isEmpty ? '—' : value,
+    };
 
-String _ageLabel(Object? raw) {
+String _ageLabel(BuildContext context, Object? raw) {
   final birthdate = DateTime.tryParse('${raw ?? ''}');
-  if (birthdate == null) return 'Yosh ko‘rsatilmagan';
+  if (birthdate == null) {
+    return _identityText(
+      context,
+      'Yosh ko‘rsatilmagan',
+      'Возраст не указан',
+      'Age not specified',
+    );
+  }
   final now = DateTime.now();
   var age = now.year - birthdate.year;
   if (now.month < birthdate.month ||
       (now.month == birthdate.month && now.day < birthdate.day)) {
     age--;
   }
-  return age < 0 ? 'Yosh ko‘rsatilmagan' : '$age yosh';
+  if (age < 0) {
+    return _identityText(
+      context,
+      'Yosh ko‘rsatilmagan',
+      'Возраст не указан',
+      'Age not specified',
+    );
+  }
+  return _identityText(
+    context,
+    '$age yosh',
+    '$age ${_russianAgeWord(age)}',
+    '$age ${age == 1 ? 'year' : 'years'} old',
+  );
 }
 
 Color _apiColor(Object? raw, Color fallback) {
@@ -3609,25 +5141,137 @@ Color _apiColor(Object? raw, Color fallback) {
   return parsed == null ? fallback : Color(0xFF000000 | parsed);
 }
 
-String _relationshipLabel(String value) => switch (value.toLowerCase()) {
-  'mother' => 'Ona',
-  'father' => 'Ota',
-  'grandparent' => 'Buvi yoki buva',
-  'legal_guardian' => 'Qonuniy vakil',
-  'sibling' => 'Aka, uka, opa yoki singil',
-  'aunt' => 'Amma, xola',
-  'uncle' => 'Amaki, tog‘a',
-  'relative' => 'Qarindosh',
-  'family_friend' => 'Oila tanishi',
-  _ => value.trim().isEmpty ? 'Vakil' : value,
+String _relationshipLabel(BuildContext context, String value) => switch (value
+    .toLowerCase()) {
+  'mother' => _identityText(context, 'Ona', 'Мать', 'Mother'),
+  'father' => _identityText(context, 'Ota', 'Отец', 'Father'),
+  'grandparent' => _identityText(
+    context,
+    'Buvi yoki buva',
+    'Бабушка или дедушка',
+    'Grandparent',
+  ),
+  'legal_guardian' => _identityText(
+    context,
+    'Qonuniy vakil',
+    'Законный представитель',
+    'Legal guardian',
+  ),
+  'sibling' => _identityText(
+    context,
+    'Aka, uka, opa yoki singil',
+    'Брат или сестра',
+    'Sibling',
+  ),
+  'aunt' => _identityText(context, 'Amma, xola', 'Тётя', 'Aunt'),
+  'uncle' => _identityText(context, 'Amaki, tog‘a', 'Дядя', 'Uncle'),
+  'relative' => _identityText(context, 'Qarindosh', 'Родственник', 'Relative'),
+  'family_friend' => _identityText(
+    context,
+    'Oila tanishi',
+    'Друг семьи',
+    'Family friend',
+  ),
+  _ =>
+    value.trim().isEmpty
+        ? _identityText(context, 'Vakil', 'Представитель', 'Guardian')
+        : value,
 };
+
+String _identityStatusLabel(BuildContext context, String raw) => switch (raw
+    .trim()
+    .toLowerCase()) {
+  'active' => _identityText(context, 'Faol', 'Активен', 'Active'),
+  'inactive' => _identityText(context, 'Nofaol', 'Неактивен', 'Inactive'),
+  'blocked' => _identityText(context, 'Bloklangan', 'Заблокирован', 'Blocked'),
+  'pending' => _identityText(context, 'Kutilmoqda', 'Ожидается', 'Pending'),
+  'enrolled' => _identityText(
+    context,
+    'Qabul qilingan',
+    'Зачислен',
+    'Enrolled',
+  ),
+  'studying' => _identityText(context, 'O‘qimoqda', 'Обучается', 'Studying'),
+  'paused' => _identityText(context, 'To‘xtatilgan', 'Приостановлен', 'Paused'),
+  'graduated' => _identityText(context, 'Bitirgan', 'Выпустился', 'Graduated'),
+  'withdrawn' || 'dropped' => _identityText(
+    context,
+    'O‘qishdan chiqarilgan',
+    'Отчислен',
+    'Withdrawn',
+  ),
+  'scheduled' => _identityText(context, 'Rejada', 'Запланировано', 'Scheduled'),
+  'cancelled' || 'canceled' => _identityText(
+    context,
+    'Bekor qilingan',
+    'Отменено',
+    'Cancelled',
+  ),
+  'approved' => _identityText(
+    context,
+    'Tasdiqlangan',
+    'Подтверждено',
+    'Approved',
+  ),
+  _ =>
+    raw.trim().isEmpty
+        ? _identityText(context, 'Noma’lum', 'Неизвестно', 'Unknown')
+        : raw,
+};
+
+String _identityCount(BuildContext context, int count) => _identityText(
+  context,
+  '$count ta',
+  '$count ${_russianRecordWord(count)}',
+  '$count ${count == 1 ? 'item' : 'items'}',
+);
+
+String _russianChildrenWord(int count) {
+  final lastTwo = count % 100;
+  if (lastTwo >= 11 && lastTwo <= 14) return 'детей';
+  return switch (count % 10) {
+    1 => 'ребёнок',
+    2 || 3 || 4 => 'ребёнка',
+    _ => 'детей',
+  };
+}
+
+String _russianRecordWord(int count) {
+  final lastTwo = count % 100;
+  if (lastTwo >= 11 && lastTwo <= 14) return 'записей';
+  return switch (count % 10) {
+    1 => 'запись',
+    2 || 3 || 4 => 'записи',
+    _ => 'записей',
+  };
+}
+
+String _russianFieldWord(int count) {
+  final lastTwo = count % 100;
+  if (lastTwo >= 11 && lastTwo <= 14) return 'полей';
+  return switch (count % 10) {
+    1 => 'поле',
+    2 || 3 || 4 => 'поля',
+    _ => 'полей',
+  };
+}
+
+String _russianAgeWord(int age) {
+  final lastTwo = age % 100;
+  if (lastTwo >= 11 && lastTwo <= 14) return 'лет';
+  return switch (age % 10) {
+    1 => 'год',
+    2 || 3 || 4 => 'года',
+    _ => 'лет',
+  };
+}
 
 double? _identityDouble(Object? value) {
   if (value is num) return value.toDouble();
   return double.tryParse('${value ?? ''}');
 }
 
-List<MapEntry<String, double>> _mapEntries(Object? raw) {
+List<MapEntry<String, double>> _mapEntries(BuildContext context, Object? raw) {
   if (raw is! Map) return const [];
   final entries = <MapEntry<String, double>>[];
   for (final entry in raw.entries) {
@@ -3635,25 +5279,42 @@ List<MapEntry<String, double>> _mapEntries(Object? raw) {
     if (value == null || value < 0) continue;
     final key = '${entry.key ?? ''}'.trim();
     entries.add(
-      MapEntry(key.isEmpty || key == 'null' ? 'Noma’lum' : key, value),
+      MapEntry(
+        key.isEmpty || key == 'null'
+            ? _identityText(context, 'Noma’lum', 'Неизвестно', 'Unknown')
+            : key,
+        value,
+      ),
     );
   }
   entries.sort((a, b) => b.value.compareTo(a.value));
   return entries;
 }
 
-String _referenceLabel(Object? raw) {
-  if (!_filled(raw)) return 'Biriktirilmagan';
+String _referenceLabel(BuildContext context, Object? raw) {
+  if (!_filled(raw)) {
+    return _identityText(
+      context,
+      'Biriktirilmagan',
+      'Не назначено',
+      'Not assigned',
+    );
+  }
   if (raw is Map) {
     final normalized = raw.map((key, value) => MapEntry('$key', value));
-    return valueText(normalized, const [
-      'name',
-      'title',
-      'label',
-    ], fallback: 'Biriktirilgan');
+    return valueText(
+      normalized,
+      const ['name', 'title', 'label'],
+      fallback: _identityText(
+        context,
+        'Biriktirilgan',
+        'Назначено',
+        'Assigned',
+      ),
+    );
   }
   if (raw is num || int.tryParse('$raw'.trim()) != null) {
-    return 'Biriktirilgan';
+    return _identityText(context, 'Biriktirilgan', 'Назначено', 'Assigned');
   }
   return '$raw'.trim();
 }

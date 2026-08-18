@@ -181,7 +181,7 @@ Future<void> starforgeFirebaseMessagingBackgroundHandler(
         id: _notificationId(message),
         title: payload['title']?.toString().trim().isNotEmpty == true
             ? payload['title'].toString()
-            : 'StarForge EDU',
+            : 'Starforge Family',
         body: payload['body']?.toString().trim().isNotEmpty == true
             ? payload['body'].toString()
             : 'Yangi bildirishnoma bor',
@@ -337,7 +337,7 @@ class PushNotificationService {
       id: _notificationId(message),
       title: payload['title']?.toString().trim().isNotEmpty == true
           ? payload['title'].toString()
-          : 'StarForge EDU',
+          : 'Starforge Family',
       body: payload['body']?.toString().trim().isNotEmpty == true
           ? payload['body'].toString()
           : 'Yangi bildirishnoma bor',

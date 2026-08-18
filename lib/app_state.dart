@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'family_data.dart';
 import 'family_messaging.dart';
+import 'portal_preferences.dart';
 
 abstract final class SfClock {
   static DateTime Function() now = DateTime.now;
@@ -18,7 +19,9 @@ class AppState extends ChangeNotifier {
     AiTutorTransport? aiTransport,
     FamilySnapshot? familySnapshot,
     FamilyMessagingRepository? messagingRepository,
+    PortalPreferences? preferences,
   }) : _aiTransport = aiTransport ?? const LocalStudyTutorTransport(),
+       _preferences = preferences ?? PortalPreferences.memory(),
        _familyData =
            familySnapshot ?? FamilySnapshot.localPreview(now: SfClock.now()),
        messaging = FamilyMessagingController(
@@ -26,6 +29,7 @@ class AppState extends ChangeNotifier {
          now: SfClock.now(),
        ) {
     messaging.addListener(_relayMessaging);
+    _preferences.addListener(_relayPreferences);
   }
 
   static const announcementIds = {
@@ -36,13 +40,9 @@ class AppState extends ChangeNotifier {
   };
 
   final ValueNotifier<int> resetSignal = ValueNotifier<int>(0);
+  final PortalPreferences _preferences;
   FamilySnapshot _familyData;
   final FamilyMessagingController messaging;
-  bool largeText = false;
-  bool reduceMotion = false;
-  bool hideAmounts = false;
-  bool darkMode = false;
-  bool highContrast = false;
   bool paymentCompleted = false;
   String? receiptNumber;
   String? paymentMethod;
@@ -105,6 +105,24 @@ class AppState extends ChangeNotifier {
   bool get aiUsesLocalDemo => _aiTransport.isLocalDemo;
   FamilySnapshot get familyData => _familyData;
   bool get familyUsesLocalPreview => _familyData.isPreview;
+  PortalPreferences get preferences => _preferences;
+  PortalLanguage get appLanguage => _preferences.language;
+  Locale get locale => _preferences.locale;
+  PortalCurrency get currency => _preferences.currency;
+  ThemeMode get themeMode => _preferences.themeMode;
+  PortalThemePreference get themePreference => _preferences.themePreference;
+  PortalDensity get density => _preferences.density;
+  PortalPattern get pattern => _preferences.pattern;
+  PortalChatStyle get chatStyle => _preferences.chatStyle;
+  PortalChatWallpaper get chatWallpaper => _preferences.chatWallpaper;
+  int get paletteIndex => _preferences.paletteIndex;
+  int get fontIndex => _preferences.fontIndex;
+  bool get largeText => _preferences.largeText;
+  bool get reduceMotion => _preferences.reduceMotion;
+  bool get hideAmounts => _preferences.hideAmounts;
+  bool get darkMode =>
+      _preferences.themePreference == PortalThemePreference.dark;
+  bool get highContrast => _preferences.highContrast;
 
   String messagingScopeForRole(String role) =>
       FamilyMessagingController.scopeKey(
@@ -141,43 +159,58 @@ class AppState extends ChangeNotifier {
 
   void _relayMessaging() => notifyListeners();
 
+  void _relayPreferences() => notifyListeners();
+
   @override
   void dispose() {
     messaging.removeListener(_relayMessaging);
+    _preferences.removeListener(_relayPreferences);
     messaging.dispose();
     resetSignal.dispose();
     super.dispose();
   }
 
   void setLargeText(bool value) {
-    if (largeText == value) return;
-    largeText = value;
-    notifyListeners();
+    _preferences.setLargeText(value);
   }
 
   void setReduceMotion(bool value) {
-    if (reduceMotion == value) return;
-    reduceMotion = value;
-    notifyListeners();
+    _preferences.setReduceMotion(value);
   }
 
   void setHideAmounts(bool value) {
-    if (hideAmounts == value) return;
-    hideAmounts = value;
-    notifyListeners();
+    _preferences.setHideAmounts(value);
   }
 
   void setDarkMode(bool value) {
-    if (darkMode == value) return;
-    darkMode = value;
-    notifyListeners();
+    _preferences.setDarkMode(value);
   }
 
   void setHighContrast(bool value) {
-    if (highContrast == value) return;
-    highContrast = value;
-    notifyListeners();
+    _preferences.setHighContrast(value);
   }
+
+  void setAppLanguage(PortalLanguage value) => _preferences.setLanguage(value);
+
+  void setCurrency(PortalCurrency value) => _preferences.setCurrency(value);
+
+  void setThemePreference(PortalThemePreference value) =>
+      _preferences.setThemePreference(value);
+
+  void setDensity(PortalDensity value) => _preferences.setDensity(value);
+
+  void setPaletteIndex(int value) => _preferences.setPaletteIndex(value);
+
+  void setFontIndex(int value) => _preferences.setFontIndex(value);
+
+  void setPattern(PortalPattern value) => _preferences.setPattern(value);
+
+  void setChatStyle(PortalChatStyle value) => _preferences.setChatStyle(value);
+
+  void setChatWallpaper(PortalChatWallpaper value) =>
+      _preferences.setChatWallpaper(value);
+
+  void resetPreferences() => _preferences.reset();
 
   void setProfileName(String role, String value) {
     final normalized = value.trim();
@@ -599,11 +632,7 @@ class AppState extends ChangeNotifier {
     paymentCompleted = false;
     receiptNumber = null;
     paymentMethod = null;
-    largeText = false;
-    reduceMotion = false;
-    hideAmounts = false;
-    darkMode = false;
-    highContrast = false;
+    _preferences.reset();
     profileNames
       ..clear()
       ..addAll({'parent': 'Akbarova Dilnoza', 'student': 'Akbarov Akmal'});

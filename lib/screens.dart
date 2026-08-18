@@ -1204,7 +1204,7 @@ class _CardsScreenState extends State<CardsScreen> {
     await Clipboard.setData(
       const ClipboardData(
         text:
-            'StarForge EDU · Akmalning Iyul natijasi: 12 ta Up karta, 1 ta ogohlantirish, sinfda #2.',
+            'Starforge Family · Akmalning Iyul natijasi: 12 ta Up karta, 1 ta ogohlantirish, sinfda #2.',
       ),
     );
     if (context.mounted) {
@@ -4636,7 +4636,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
               await Clipboard.setData(
                 ClipboardData(
                   text:
-                      'StarForge EDU kvitansiya\n$number\n${hidden ? "Summa yashirilgan" : money(600000)}\n$method',
+                      'Starforge Family kvitansiya\n$number\n${hidden ? "Summa yashirilgan" : money(600000)}\n$method',
                 ),
               );
               if (context.mounted) {

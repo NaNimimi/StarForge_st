@@ -344,7 +344,7 @@ class _GradesScreenState extends State<GradesScreen> {
     await Clipboard.setData(
       ClipboardData(
         text:
-            'StarForge EDU · Akmal baholari\n'
+            'Starforge Family · Akmal baholari\n'
             '$_period o‘rtachasi: ${average.toStringAsFixed(1)}%\n'
             'Eng yuqori: ${highest.round()}%\n'
             'Baholangan ishlar: $count',
@@ -2330,7 +2330,7 @@ class _SupportScreenState extends State<SupportScreen> {
 
   Future<void> _copyDiagnostics(BuildContext context) async {
     const diagnostics =
-        'StarForge EDU diagnostics\n'
+        'Starforge Family diagnostics\n'
         'Mode: demo/session\n'
         'Framework: Flutter\n'
         'Role state: local\n'

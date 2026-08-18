@@ -2,6 +2,8 @@ name: Live Student and Parent API Smoke
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '30 2 * * *'
 
 permissions:
   contents: read
@@ -14,32 +16,51 @@ jobs:
   smoke:
     name: Verify both live roles
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       STARFORGE_API_BASE_URL: ${{ vars.STARFORGE_API_BASE_URL || 'https://starforge.78.111.91.113.nip.io' }}
       STARFORGE_STUDENT_USERNAME: ${{ secrets.STARFORGE_STUDENT_USERNAME }}
       STARFORGE_STUDENT_PASSWORD: ${{ secrets.STARFORGE_STUDENT_PASSWORD }}
       STARFORGE_PARENT_USERNAME: ${{ secrets.STARFORGE_PARENT_USERNAME }}
       STARFORGE_PARENT_PASSWORD: ${{ secrets.STARFORGE_PARENT_PASSWORD }}
+      STARFORGE_REQUIRE_FIXTURES: ${{ vars.STARFORGE_REQUIRE_FIXTURES || 'true' }}
     steps:
+      - name: Detect protected smoke credentials
+        id: configuration
+        shell: bash
+        run: |
+          test -n "$STARFORGE_API_BASE_URL"
+          configured=0
+          for value in "$STARFORGE_STUDENT_USERNAME" "$STARFORGE_STUDENT_PASSWORD" "$STARFORGE_PARENT_USERNAME" "$STARFORGE_PARENT_PASSWORD"; do
+            if [ -n "$value" ]; then configured=$((configured + 1)); fi
+          done
+          if [ "$configured" -ne 0 ] && [ "$configured" -ne 4 ]; then
+            echo 'Live smoke credentials must be all present or all absent.'
+            exit 1
+          fi
+          if [ "$configured" -eq 4 ]; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            if [ "$GITHUB_EVENT_NAME" = 'workflow_dispatch' ]; then
+              echo 'Manual live smoke requires all four protected account secrets.'
+              exit 1
+            fi
+            echo 'Nightly live smoke skipped because protected account secrets are not configured.'
+          fi
+
       - name: Check out repository
+        if: steps.configuration.outputs.ready == 'true'
         uses: actions/checkout@v5
 
       - name: Set up Flutter
+        if: steps.configuration.outputs.ready == 'true'
         uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.44.1
           channel: stable
           cache: true
 
-      - name: Validate workflow configuration
-        shell: bash
-        run: |
-          test -n "$STARFORGE_API_BASE_URL"
-          test -n "$STARFORGE_STUDENT_USERNAME"
-          test -n "$STARFORGE_STUDENT_PASSWORD"
-          test -n "$STARFORGE_PARENT_USERNAME"
-          test -n "$STARFORGE_PARENT_PASSWORD"
-
       - name: Run role-aware live API checks
+        if: steps.configuration.outputs.ready == 'true'
         run: dart run tool/live_api_smoke.dart

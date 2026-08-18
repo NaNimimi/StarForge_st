@@ -6,6 +6,7 @@ typedef Operation = ({String method, String path});
 const _httpMethods = {'GET', 'POST', 'PUT', 'PATCH', 'DELETE'};
 
 const _requiredFamilyOperations = <Operation>{
+  (method: 'POST', path: '/api/v1/auth/login/'),
   (method: 'POST', path: '/api/v1/auth/role-login/'),
   (method: 'POST', path: '/api/v1/auth/logout/'),
   (method: 'GET', path: '/api/v1/users/me/'),
@@ -15,11 +16,30 @@ const _requiredFamilyOperations = <Operation>{
   (method: 'GET', path: '/api/v1/students/'),
   (method: 'GET', path: '/api/v1/students/{}/'),
   (method: 'GET', path: '/api/v1/students/{}/events/'),
+  (method: 'GET', path: '/api/v1/students/comparison/'),
   (method: 'GET', path: '/api/v1/parents/me/children/'),
   (method: 'GET', path: '/api/v1/parents/me/children/{}/report/'),
   (method: 'GET', path: '/api/v1/parents/'),
+  (method: 'GET', path: '/api/v1/parents/{}/'),
   (method: 'GET', path: '/api/v1/parents/guardians/'),
   (method: 'GET', path: '/api/v1/parents/pickups/'),
+  (method: 'GET', path: '/api/v1/assignments/{}/'),
+  (method: 'GET', path: '/api/v1/assignments/submissions/{}/'),
+  (method: 'GET', path: '/api/v1/schedule/lessons/{}/'),
+  (method: 'GET', path: '/api/v1/attendance/records/{}/'),
+  (method: 'GET', path: '/api/v1/academics/exams/{}/'),
+  (method: 'GET', path: '/api/v1/academics/grades/{}/'),
+  (method: 'GET', path: '/api/v1/academics/transcripts/{}/'),
+  (method: 'GET', path: '/api/v1/achievements/'),
+  (method: 'GET', path: '/api/v1/achievements/{}/'),
+  (method: 'GET', path: '/api/v1/cards/{}/'),
+  (method: 'GET', path: '/api/v1/content/libraries/{}/'),
+  (method: 'GET', path: '/api/v1/content/courses/{}/'),
+  (method: 'GET', path: '/api/v1/content/modules/{}/'),
+  (method: 'GET', path: '/api/v1/content/lessons/{}/'),
+  (method: 'GET', path: '/api/v1/content/folders/{}/'),
+  (method: 'GET', path: '/api/v1/content/files/{}/'),
+  (method: 'GET', path: '/api/v1/content/materials/{}/'),
 };
 
 void main(List<String> arguments) {
@@ -155,11 +175,22 @@ void main(List<String> arguments) {
 Set<Operation> _sourceOperations(Directory sourceDirectory) {
   final operations = <Operation>{};
   final callPattern = RegExp(
-    r"_api\s*\.\s*(get|post|put|patch|delete)\s*\(\s*'([^']+)'",
+    r"_api\s*\.\s*(get|post|put|patch|delete|postMultipartBytes)\s*\(\s*'([^']+)'",
     multiLine: true,
+  );
+  final operationAnnotationPattern = RegExp(
+    r"//\s*openapi-operation:\s*(GET|POST|PUT|PATCH|DELETE)\s+(/api/v1/\S+)",
   );
   final optionalGetPattern = RegExp(
     r"_optionalGet\s*\(\s*'([^']+)'",
+    multiLine: true,
+  );
+  final controllerGetPattern = RegExp(
+    r"\bgetApi\s*\(\s*'([^']+)'",
+    multiLine: true,
+  );
+  final detailGetPattern = RegExp(
+    r"_loadDetail\s*\(\s*path:\s*'([^']+)'",
     multiLine: true,
   );
   final files = sourceDirectory
@@ -171,12 +202,31 @@ Set<Operation> _sourceOperations(Directory sourceDirectory) {
     for (final match in callPattern.allMatches(source)) {
       final path = match.group(2)!;
       if (!path.startsWith('/api/v1/')) continue;
+      final sourceMethod = match.group(1)!;
       operations.add((
-        method: match.group(1)!.toUpperCase(),
+        method: sourceMethod == 'postMultipartBytes'
+            ? 'POST'
+            : sourceMethod.toUpperCase(),
         path: _canonicalPath(path),
       ));
     }
+    for (final match in operationAnnotationPattern.allMatches(source)) {
+      operations.add((
+        method: match.group(1)!,
+        path: _canonicalPath(match.group(2)!),
+      ));
+    }
     for (final match in optionalGetPattern.allMatches(source)) {
+      final path = match.group(1)!;
+      if (!path.startsWith('/api/v1/')) continue;
+      operations.add((method: 'GET', path: _canonicalPath(path)));
+    }
+    for (final match in controllerGetPattern.allMatches(source)) {
+      final path = match.group(1)!;
+      if (!path.startsWith('/api/v1/')) continue;
+      operations.add((method: 'GET', path: _canonicalPath(path)));
+    }
+    for (final match in detailGetPattern.allMatches(source)) {
       final path = match.group(1)!;
       if (!path.startsWith('/api/v1/')) continue;
       operations.add((method: 'GET', path: _canonicalPath(path)));

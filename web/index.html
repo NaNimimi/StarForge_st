@@ -18,47 +18,47 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="StarForge EDU — student and parent education dashboard.">
-  <meta name="theme-color" content="#4F6A3A">
+  <meta name="description" content="Starforge Family — the modern student and parent learning portal.">
+  <meta name="theme-color" content="#5B5CE2">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="StarForge EDU">
+  <meta name="apple-mobile-web-app-title" content="Starforge Family">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>StarForge EDU Family</title>
+  <title>Starforge Family</title>
   <link rel="manifest" href="manifest.json">
   <style>
-    html, body { margin: 0; min-height: 100%; background: #F1EFE6; }
+    html, body { margin: 0; min-height: 100%; background: #F6F7FC; }
     #sf-loader {
       position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center;
-      background: #F1EFE6; color: #26301E; font-family: system-ui, sans-serif;
+      background: #F6F7FC; color: #171A2C; font-family: system-ui, sans-serif;
       transition: opacity .22s ease;
     }
     .sf-loader-card { display: grid; justify-items: center; gap: 14px; }
     .sf-loader-mark {
       width: 58px; height: 58px; display: grid; place-items: center;
-      border-radius: 16px; background: #4F6A3A; color: white; font-size: 28px;
-      box-shadow: 0 16px 38px rgba(79, 106, 58, .20);
+      border-radius: 18px; background: linear-gradient(145deg, #5B5CE2, #7C5CE7); color: white; font-size: 28px;
+      box-shadow: 0 18px 42px rgba(91, 92, 226, .25);
     }
     .sf-loader-title { font-size: 16px; font-weight: 800; letter-spacing: .02em; }
-    .sf-loader-line { width: 128px; height: 3px; overflow: hidden; border-radius: 99px; background: #DCD8C8; }
+    .sf-loader-line { width: 128px; height: 3px; overflow: hidden; border-radius: 99px; background: #E2E5EF; }
     .sf-loader-line::after {
       content: ""; display: block; width: 52px; height: 100%; border-radius: inherit;
-      background: #4F6A3A; animation: sf-loading 1s ease-in-out infinite alternate;
+      background: #5B5CE2; animation: sf-loading 1s ease-in-out infinite alternate;
     }
     @keyframes sf-loading { from { transform: translateX(-10px); } to { transform: translateX(86px); } }
   </style>
 </head>
 <body>
-  <div id="sf-loader" role="status" aria-label="StarForge yuklanmoqda">
+  <div id="sf-loader" role="status" aria-label="Starforge Family is loading">
     <div class="sf-loader-card">
       <div class="sf-loader-mark" aria-hidden="true">✦</div>
-      <div class="sf-loader-title">StarForge EDU</div>
+      <div class="sf-loader-title">Starforge Family</div>
       <div class="sf-loader-line" aria-hidden="true"></div>
     </div>
   </div>

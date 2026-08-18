@@ -20,7 +20,7 @@ jobs:
   quality:
     name: Analyze, test, and audit API
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -50,6 +50,9 @@ jobs:
 
       - name: Run tests with coverage
         run: flutter test --coverage --concurrency=1
+
+      - name: Enforce coverage floor
+        run: dart run tool/verify_coverage.dart coverage/lcov.info 20
 
       - name: Upload coverage
         if: always() && hashFiles('coverage/lcov.info') != ''
@@ -95,13 +98,16 @@ jobs:
           retention-days: 14
 
   android:
-    name: Build and validate Android APK
+    name: Build Android QA and protected release artifacts
     needs: quality
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v6
 
       - name: Set up Java
         uses: actions/setup-java@v5
@@ -119,36 +125,68 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Restore optional Firebase configuration
-        if: ${{ secrets.STARFORGE_GOOGLE_SERVICES_JSON_B64 != '' }}
+      - name: Validate protected release configuration
         env:
           GOOGLE_SERVICES_JSON_B64: ${{ secrets.STARFORGE_GOOGLE_SERVICES_JSON_B64 }}
-        run: printf '%s' "$GOOGLE_SERVICES_JSON_B64" | base64 --decode > android/app/google-services.json
-
-      - name: Validate optional Firebase configuration
-        env:
-          FIREBASE_API_KEY: ${{ secrets.STARFORGE_FIREBASE_ANDROID_API_KEY }}
-          FIREBASE_APP_ID: ${{ secrets.STARFORGE_FIREBASE_ANDROID_APP_ID }}
-          FIREBASE_SENDER_ID: ${{ secrets.STARFORGE_FIREBASE_MESSAGING_SENDER_ID }}
-          FIREBASE_PROJECT_ID: ${{ secrets.STARFORGE_FIREBASE_PROJECT_ID }}
+          KEYSTORE_B64: ${{ secrets.STARFORGE_ANDROID_KEYSTORE_B64 }}
+          KEY_ALIAS: ${{ secrets.STARFORGE_ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.STARFORGE_ANDROID_KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.STARFORGE_ANDROID_STORE_PASSWORD }}
         run: |
           set -eu
-          configured=0
-          for value in "$FIREBASE_API_KEY" "$FIREBASE_APP_ID" "$FIREBASE_SENDER_ID" "$FIREBASE_PROJECT_ID"; do
-            if [ -n "$value" ]; then configured=$((configured + 1)); fi
+          signing_count=0
+          for value in "$KEYSTORE_B64" "$KEY_ALIAS" "$KEY_PASSWORD" "$STORE_PASSWORD"; do
+            if [ -n "$value" ]; then signing_count=$((signing_count + 1)); fi
           done
-          if [ "$configured" -ne 0 ] && [ "$configured" -ne 4 ]; then
-            echo "Firebase dart-define secrets must be either all present or all absent."
+          if [ "$signing_count" -ne 0 ] && [ "$signing_count" -ne 4 ]; then
+            echo 'Android signing secrets must be all present or all absent.'
             exit 1
           fi
-          if [ -f android/app/google-services.json ]; then
-            jq -e --arg package "com.starforge.starforge_student" \
-              '.client | any(.client_info.android_client_info.package_name == $package)' \
-              android/app/google-services.json >/dev/null
+          if [ -n "$GOOGLE_SERVICES_JSON_B64" ]; then
+            echo 'HAS_PRODUCTION_FIREBASE=true' >> "$GITHUB_ENV"
+          else
+            echo 'HAS_PRODUCTION_FIREBASE=false' >> "$GITHUB_ENV"
+          fi
+          if [ "$signing_count" -eq 4 ]; then
+            echo 'HAS_ANDROID_SIGNING=true' >> "$GITHUB_ENV"
+          else
+            echo 'HAS_ANDROID_SIGNING=false' >> "$GITHUB_ENV"
+          fi
+          if [ -n "$GOOGLE_SERVICES_JSON_B64" ] && [ "$signing_count" -eq 4 ]; then
+            echo 'BUILD_PRODUCTION_ANDROID=true' >> "$GITHUB_ENV"
+          else
+            echo 'BUILD_PRODUCTION_ANDROID=false' >> "$GITHUB_ENV"
+            echo 'Only the clearly labelled QA debug APK will be produced.'
           fi
 
+      - name: Restore optional Firebase configuration
+        if: env.HAS_PRODUCTION_FIREBASE == 'true'
+        env:
+          GOOGLE_SERVICES_JSON_B64: ${{ secrets.STARFORGE_GOOGLE_SERVICES_JSON_B64 }}
+        run: |
+          printf '%s' "$GOOGLE_SERVICES_JSON_B64" \
+            | base64 --decode > android/app/google-services.json
+          test -s android/app/google-services.json
+
+      - name: Validate production Firebase configuration
+        if: env.HAS_PRODUCTION_FIREBASE == 'true'
+        run: |
+          set -eu
+          test -s android/app/google-services.json
+          jq -e \
+            --arg package 'com.starforge.student' \
+            --arg project 'starforge-789b6' \
+            '.project_info.project_id == $project and
+             (.project_info.project_number | strings | length > 0) and
+             any(.client[];
+               .client_info.android_client_info.package_name == $package and
+               (.client_info.mobilesdk_app_id | strings | length > 0) and
+               any(.api_key[]; (.current_key | strings | length > 0)))' \
+            android/app/google-services.json >/dev/null
+          grep -q 'applicationId = "com.starforge.student"' android/app/build.gradle.kts
+
       - name: Restore optional Android release signing
-        if: ${{ secrets.STARFORGE_ANDROID_KEYSTORE_B64 != '' }}
+        if: env.HAS_ANDROID_SIGNING == 'true'
         env:
           KEYSTORE_B64: ${{ secrets.STARFORGE_ANDROID_KEYSTORE_B64 }}
           KEY_ALIAS: ${{ secrets.STARFORGE_ANDROID_KEY_ALIAS }}
@@ -167,6 +205,10 @@ jobs:
             printf 'keyAlias=%s\n' "$KEY_ALIAS"
             printf 'keyPassword=%s\n' "$KEY_PASSWORD"
           } > android/key.properties
+          keytool -list \
+            -keystore android/app/upload-keystore.jks \
+            -storepass "$STORE_PASSWORD" \
+            -alias "$KEY_ALIAS" >/dev/null
 
       - name: Verify Gradle wrapper
         run: |
@@ -175,71 +217,81 @@ jobs:
           chmod +x android/gradlew
 
       - name: Build debug APK
-        run: >-
-          flutter build apk --debug
-          --dart-define=API_BASE_URL=https://starforge.78.111.91.113.nip.io
-          --dart-define=STARFORGE_FIREBASE_ANDROID_API_KEY=${{ secrets.STARFORGE_FIREBASE_ANDROID_API_KEY }}
-          --dart-define=STARFORGE_FIREBASE_ANDROID_APP_ID=${{ secrets.STARFORGE_FIREBASE_ANDROID_APP_ID }}
-          --dart-define=STARFORGE_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.STARFORGE_FIREBASE_MESSAGING_SENDER_ID }}
-          --dart-define=STARFORGE_FIREBASE_PROJECT_ID=${{ secrets.STARFORGE_FIREBASE_PROJECT_ID }}
-          --dart-define=STARFORGE_FIREBASE_STORAGE_BUCKET=${{ secrets.STARFORGE_FIREBASE_STORAGE_BUCKET }}
+        run: |
+          flutter build apk --debug \
+            --dart-define=API_BASE_URL=https://starforge.78.111.91.113.nip.io
 
       - name: Build signed release APK and App Bundle
-        if: ${{ secrets.STARFORGE_ANDROID_KEYSTORE_B64 != '' }}
+        if: env.BUILD_PRODUCTION_ANDROID == 'true'
         run: |
-          flutter build apk --release --no-pub \
-            --dart-define=API_BASE_URL=https://starforge.78.111.91.113.nip.io \
-            --dart-define=STARFORGE_FIREBASE_ANDROID_API_KEY=${{ secrets.STARFORGE_FIREBASE_ANDROID_API_KEY }} \
-            --dart-define=STARFORGE_FIREBASE_ANDROID_APP_ID=${{ secrets.STARFORGE_FIREBASE_ANDROID_APP_ID }} \
-            --dart-define=STARFORGE_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.STARFORGE_FIREBASE_MESSAGING_SENDER_ID }} \
-            --dart-define=STARFORGE_FIREBASE_PROJECT_ID=${{ secrets.STARFORGE_FIREBASE_PROJECT_ID }} \
-            --dart-define=STARFORGE_FIREBASE_STORAGE_BUCKET=${{ secrets.STARFORGE_FIREBASE_STORAGE_BUCKET }}
-          flutter build appbundle --release --no-pub \
-            --dart-define=API_BASE_URL=https://starforge.78.111.91.113.nip.io \
-            --dart-define=STARFORGE_FIREBASE_ANDROID_API_KEY=${{ secrets.STARFORGE_FIREBASE_ANDROID_API_KEY }} \
-            --dart-define=STARFORGE_FIREBASE_ANDROID_APP_ID=${{ secrets.STARFORGE_FIREBASE_ANDROID_APP_ID }} \
-            --dart-define=STARFORGE_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.STARFORGE_FIREBASE_MESSAGING_SENDER_ID }} \
-            --dart-define=STARFORGE_FIREBASE_PROJECT_ID=${{ secrets.STARFORGE_FIREBASE_PROJECT_ID }} \
-            --dart-define=STARFORGE_FIREBASE_STORAGE_BUCKET=${{ secrets.STARFORGE_FIREBASE_STORAGE_BUCKET }}
+          flutter build apk --release --split-per-abi --no-pub --no-shrink \
+            --dart-define=API_BASE_URL=https://starforge.78.111.91.113.nip.io
+          flutter build appbundle --release --no-pub --no-shrink \
+            --dart-define=API_BASE_URL=https://starforge.78.111.91.113.nip.io
 
       - name: Verify required Android permissions
         run: |
           grep -q 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml
           grep -q 'android.permission.RECORD_AUDIO' android/app/src/main/AndroidManifest.xml
           grep -q 'android.permission.POST_NOTIFICATIONS' android/app/src/main/AndroidManifest.xml
+          grep -q 'android.permission.VIBRATE' android/app/src/main/AndroidManifest.xml
+          grep -q 'android.hardware.microphone' android/app/src/main/AndroidManifest.xml
+          grep -Rq 'android.permission.INTERNET' build/app/intermediates/merged_manifest/debug
           grep -Rq 'android.permission.RECORD_AUDIO' build/app/intermediates/merged_manifest/debug
           grep -Rq 'android.permission.POST_NOTIFICATIONS' build/app/intermediates/merged_manifest/debug
+          grep -Rq 'android.permission.VIBRATE' build/app/intermediates/merged_manifest/debug
+          grep -Rq 'android.permission.WAKE_LOCK' build/app/intermediates/merged_manifest/debug
+          grep -Rq 'com.google.android.c2dm.permission.RECEIVE' build/app/intermediates/merged_manifest/debug
+          grep -Rq 'starforge_messages' build/app/intermediates/merged_manifest/debug
 
       - name: Verify Firebase build readiness when configured
-        env:
-          FIREBASE_PROJECT_ID: ${{ secrets.STARFORGE_FIREBASE_PROJECT_ID }}
+        if: env.HAS_PRODUCTION_FIREBASE == 'true'
         run: |
           set -eu
           test -s build/app/outputs/flutter-apk/app-debug.apk
-          if [ -f android/app/google-services.json ]; then
-            grep -Rq 'google_app_id' build/app/intermediates/packaged_res/debug
-          fi
-          if [ -n "$FIREBASE_PROJECT_ID" ]; then
-            test -n "${{ secrets.STARFORGE_FIREBASE_ANDROID_API_KEY }}"
-            test -n "${{ secrets.STARFORGE_FIREBASE_ANDROID_APP_ID }}"
-            test -n "${{ secrets.STARFORGE_FIREBASE_MESSAGING_SENDER_ID }}"
-          fi
+          test -s build/app/generated/res/processDebugGoogleServices/values/values.xml
+          grep -q 'google_app_id' \
+            build/app/generated/res/processDebugGoogleServices/values/values.xml
+
+      - name: Verify signed production Android artifacts
+        if: env.BUILD_PRODUCTION_ANDROID == 'true'
+        run: |
+          set -eu
+          test -s build/app/outputs/bundle/release/app-release.aab
+          apk_count=0
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          for apk in build/app/outputs/flutter-apk/*-release.apk; do
+            test -s "$apk"
+            "$APKSIGNER" verify --verbose --print-certs "$apk" > /tmp/starforge-signer.txt
+            if grep -qi 'Android Debug' /tmp/starforge-signer.txt; then
+              echo "Production artifact uses the Android debug certificate: $apk"
+              exit 1
+            fi
+            apk_count=$((apk_count + 1))
+          done
+          test "$apk_count" -eq 3
+          jarsigner -verify -strict build/app/outputs/bundle/release/app-release.aab
+          test -s build/app/generated/res/processReleaseGoogleServices/values/values.xml
+          grep -q 'google_app_id' \
+            build/app/generated/res/processReleaseGoogleServices/values/values.xml
+          grep -Rq 'com.google.android.c2dm.permission.RECEIVE' build/app/intermediates/merged_manifest/release
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v6
         with:
-          name: starforge-family-android-debug
+          name: starforge-family-android-qa-debug-no-production-guarantees
           path: build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
           retention-days: 14
 
       - name: Upload signed Android release
-        if: ${{ secrets.STARFORGE_ANDROID_KEYSTORE_B64 != '' }}
+        if: env.BUILD_PRODUCTION_ANDROID == 'true'
         uses: actions/upload-artifact@v6
         with:
           name: starforge-family-android-release
           path: |
-            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/*-release.apk
             build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 14

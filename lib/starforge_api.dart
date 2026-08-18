@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 const String defaultApiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
@@ -30,10 +31,25 @@ final class ApiException implements Exception {
 }
 
 final class ApiResult {
-  const ApiResult({required this.data, this.pagination = const {}});
+  const ApiResult({
+    required this.data,
+    this.pagination = const {},
+    this.failure,
+  });
+
+  const ApiResult.failed(ApiException error)
+    : data = null,
+      pagination = const {},
+      failure = error;
 
   final Object? data;
   final Map<String, Object?> pagination;
+  final ApiException? failure;
+
+  bool get isSuccessful => failure == null;
+  bool get isFailed => failure != null;
+
+  ApiPageInfo get pageInfo => ApiPageInfo.fromResult(this);
 
   List<Map<String, Object?>> get rows {
     Object? value = data;
@@ -53,11 +69,62 @@ final class ApiResult {
       : const <String, Object?>{};
 }
 
-String normalizeApiBaseUrl(String raw) {
+/// A normalized view over both StarForge's page-number envelope and cursor
+/// feeds such as notifications. Existing consumers can keep using
+/// [ApiResult.rows], while screens that need "load more" no longer have to
+/// inspect loosely typed response maps.
+final class ApiPageInfo {
+  const ApiPageInfo({
+    this.total,
+    this.page,
+    this.pageSize,
+    this.totalPages,
+    this.next,
+    this.previous,
+  });
+
+  factory ApiPageInfo.fromResult(ApiResult result) {
+    final pagination = result.pagination;
+    final data = result.data is Map
+        ? Map<String, Object?>.from(result.data! as Map)
+        : const <String, Object?>{};
+    Object? first(Iterable<String> keys) {
+      for (final key in keys) {
+        if (pagination.containsKey(key)) return pagination[key];
+        if (data.containsKey(key)) return data[key];
+      }
+      return null;
+    }
+
+    return ApiPageInfo(
+      total: _apiInteger(first(const ['total', 'count'])),
+      page: _apiInteger(first(const ['page', 'current_page'])),
+      pageSize: _apiInteger(first(const ['page_size', 'per_page', 'limit'])),
+      totalPages: _apiInteger(first(const ['pages', 'total_pages'])),
+      next: _apiNullableText(first(const ['next', 'next_cursor'])),
+      previous: _apiNullableText(first(const ['previous', 'prev_cursor'])),
+    );
+  }
+
+  final int? total;
+  final int? page;
+  final int? pageSize;
+  final int? totalPages;
+  final String? next;
+  final String? previous;
+
+  bool get hasNext =>
+      next != null ||
+      (page != null && totalPages != null && page! < totalPages!);
+  bool get hasPrevious => previous != null || (page != null && page! > 1);
+}
+
+String normalizeApiBaseUrl(String raw, {String language = 'uz'}) {
+  final lang = _normalizeLanguage(language);
   var value = raw.trim();
   if (value.isEmpty) value = defaultApiBaseUrl;
   if (RegExp(r'\s').hasMatch(value)) {
-    throw const FormatException('Markaz manzili noto‘g‘ri.');
+    throw FormatException(_apiCopy(lang, 'invalidAddress'));
   }
   if (!value.contains('://')) value = 'https://$value';
   value = value.replaceAll(RegExp(r'/+$'), '');
@@ -67,7 +134,7 @@ String normalizeApiBaseUrl(String raw) {
       !uri.hasScheme ||
       !const {'http', 'https'}.contains(uri.scheme) ||
       uri.host.isEmpty) {
-    throw const FormatException('Markaz manzili noto‘g‘ri.');
+    throw FormatException(_apiCopy(lang, 'invalidAddress'));
   }
   final localHost =
       uri.host == 'localhost' ||
@@ -75,25 +142,35 @@ String normalizeApiBaseUrl(String raw) {
       uri.host == '::1' ||
       uri.host.endsWith('.localhost');
   if (uri.scheme == 'http' && !localHost) {
-    throw const FormatException(
-      'Markaz manzili HTTPS orqali himoyalangan bo‘lishi kerak.',
-    );
+    throw FormatException(_apiCopy(lang, 'requiresHttps'));
   }
   return uri.toString().replaceAll(RegExp(r'/+$'), '');
 }
 
 final class StarForgeApi {
-  StarForgeApi({required String baseUrl, this.accessToken, http.Client? client})
-    : _baseUrl = normalizeApiBaseUrl(baseUrl),
-      _client = client ?? http.Client();
+  StarForgeApi({
+    required String baseUrl,
+    this.accessToken,
+    String acceptLanguage = 'uz',
+    http.Client? client,
+  }) : _baseUrl = normalizeApiBaseUrl(baseUrl, language: acceptLanguage),
+       _acceptLanguage = _normalizeLanguage(acceptLanguage),
+       _client = client ?? http.Client();
 
   final http.Client _client;
   String _baseUrl;
+  String _acceptLanguage;
   String? accessToken;
 
   String get baseUrl => _baseUrl;
 
-  set baseUrl(String value) => _baseUrl = normalizeApiBaseUrl(value);
+  String get acceptLanguage => _acceptLanguage;
+
+  set baseUrl(String value) =>
+      _baseUrl = normalizeApiBaseUrl(value, language: _acceptLanguage);
+
+  set acceptLanguage(String value) =>
+      _acceptLanguage = _normalizeLanguage(value);
 
   Uri uri(String path, [Map<String, Object?> query = const {}]) {
     final normalizedPath = path.startsWith('/') ? path : '/$path';
@@ -137,23 +214,45 @@ final class StarForgeApi {
         .timeout(const Duration(seconds: 60));
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(
-        message: 'Fayl serverga yuklanmadi.',
+        message: _apiCopy(_acceptLanguage, 'uploadFailed'),
         code: 'upload_failed',
         statusCode: response.statusCode,
       );
     }
   }
 
+  Future<Uint8List> downloadBytes(String downloadUrl) async {
+    final response = await _client
+        .get(Uri.parse(downloadUrl))
+        .timeout(const Duration(seconds: 60));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(
+        message: _apiCopy(_acceptLanguage, 'downloadFailed'),
+        code: 'download_failed',
+        statusCode: response.statusCode,
+      );
+    }
+    return response.bodyBytes;
+  }
+
   Future<void> uploadMultipartBytes(
     String uploadUrl,
     Uint8List bytes, {
     required String filename,
+    required String contentType,
     required Map<String, String> fields,
   }) async {
     final request = http.MultipartRequest('POST', Uri.parse(uploadUrl))
       ..fields.addAll(fields)
       ..files.add(
-        http.MultipartFile.fromBytes('file', bytes, filename: filename),
+        http.MultipartFile.fromBytes(
+          'file',
+          bytes,
+          filename: filename,
+          // Storage persists the MIME type of this part. The messaging API
+          // verifies it exactly before consuming the one-time upload grant.
+          contentType: MediaType.parse(contentType),
+        ),
       );
     try {
       final response = await _client
@@ -162,19 +261,59 @@ final class StarForgeApi {
       await response.stream.drain<void>();
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw ApiException(
-          message: 'Fayl serverga yuklanmadi.',
+          message: _apiCopy(_acceptLanguage, 'uploadFailed'),
           code: 'upload_failed',
           statusCode: response.statusCode,
         );
       }
     } on TimeoutException {
-      throw const ApiException(
-        message: 'Faylni yuklash vaqti tugadi. Qayta urinib ko‘ring.',
+      throw ApiException(
+        message: _apiCopy(_acceptLanguage, 'uploadTimeout'),
         code: 'upload_timeout',
       );
     } on http.ClientException catch (error) {
       throw ApiException(
-        message: 'Fayl serveriga ulanib bo‘lmadi.',
+        message: _apiCopy(_acceptLanguage, 'uploadConnection'),
+        code: 'upload_connection_failed',
+        fields: {'detail': error.message},
+      );
+    }
+  }
+
+  Future<ApiResult> postMultipartBytes(
+    String path,
+    Uint8List bytes, {
+    required String filename,
+    required String contentType,
+    String fieldName = 'file',
+  }) async {
+    final request = http.MultipartRequest('POST', uri(path))
+      ..headers['Accept'] = 'application/json'
+      ..headers['Accept-Language'] = _acceptLanguage
+      ..files.add(
+        http.MultipartFile.fromBytes(
+          fieldName,
+          bytes,
+          filename: filename,
+          contentType: MediaType.parse(contentType),
+        ),
+      );
+    if (accessToken case final token? when token.isNotEmpty) {
+      request.headers['Authorization'] = 'Bearer $token';
+    }
+    try {
+      final streamed = await _client
+          .send(request)
+          .timeout(const Duration(seconds: 60));
+      return _resultFromResponse(await http.Response.fromStream(streamed));
+    } on TimeoutException {
+      throw ApiException(
+        message: _apiCopy(_acceptLanguage, 'uploadTimeout'),
+        code: 'upload_timeout',
+      );
+    } on http.ClientException catch (error) {
+      throw ApiException(
+        message: _apiCopy(_acceptLanguage, 'uploadConnection'),
         code: 'upload_connection_failed',
         fields: {'detail': error.message},
       );
@@ -187,7 +326,10 @@ final class StarForgeApi {
     Object? body,
     Map<String, Object?> query = const {},
   }) async {
-    final headers = <String, String>{'Accept': 'application/json'};
+    final headers = <String, String>{
+      'Accept': 'application/json',
+      'Accept-Language': _acceptLanguage,
+    };
     if (body != null) headers['Content-Type'] = 'application/json';
     if (accessToken case final token? when token.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
@@ -218,28 +360,31 @@ final class StarForgeApi {
       };
       response = await request.timeout(const Duration(seconds: 25));
     } on TimeoutException {
-      throw const ApiException(
-        message:
-            'Server javob bermadi. Internet va markaz manzilini tekshiring.',
+      throw ApiException(
+        message: _apiCopy(_acceptLanguage, 'timeout'),
         code: 'timeout',
       );
     } on http.ClientException catch (error) {
       throw ApiException(
         message: kIsWeb
-            ? 'Serverga ulanib bo‘lmadi. Manzil va CORS sozlamasini tekshiring.'
-            : 'Serverga ulanib bo‘lmadi. Internetni tekshiring.',
+            ? _apiCopy(_acceptLanguage, 'connectionWeb')
+            : _apiCopy(_acceptLanguage, 'connection'),
         code: 'connection_failed',
         fields: {'detail': error.message},
       );
     }
 
+    return _resultFromResponse(response);
+  }
+
+  ApiResult _resultFromResponse(http.Response response) {
     Object? decoded;
     if (response.body.trim().isNotEmpty) {
       try {
         decoded = jsonDecode(response.body);
       } on FormatException {
         throw ApiException(
-          message: 'Server noto‘g‘ri formatda javob berdi.',
+          message: _apiCopy(_acceptLanguage, 'invalidResponse'),
           code: 'invalid_response',
           statusCode: response.statusCode,
         );
@@ -258,7 +403,7 @@ final class StarForgeApi {
       throw ApiException(
         message: _text(
           map['message'],
-          fallback: _statusMessage(response.statusCode),
+          fallback: _statusMessage(response.statusCode, _acceptLanguage),
         ),
         code: _text(map['code'], fallback: 'request_failed'),
         statusCode: response.statusCode,
@@ -371,12 +516,126 @@ String _text(Object? value, {required String fallback}) {
   return text.isEmpty || text == 'null' ? fallback : text;
 }
 
-String _statusMessage(int status) => switch (status) {
-  400 => 'Kiritilgan ma’lumotlarni tekshiring.',
-  401 => 'Sessiya tugagan. Qayta kiring.',
-  403 => 'Bu amal uchun ruxsat yo‘q.',
-  404 => 'Ma’lumot topilmadi.',
-  429 => 'Juda ko‘p urinish. Birozdan keyin qayta urinib ko‘ring.',
-  >= 500 => 'Serverda vaqtinchalik xatolik yuz berdi.',
-  _ => 'So‘rov bajarilmadi.',
+int? _apiInteger(Object? value) => switch (value) {
+  int number => number,
+  num number => number.toInt(),
+  String text => int.tryParse(text),
+  _ => null,
+};
+
+String? _apiNullableText(Object? value) {
+  final text = value?.toString().trim() ?? '';
+  return text.isEmpty || text == 'null' ? null : text;
+}
+
+String _normalizeLanguage(String value) {
+  final normalized = value.trim().toLowerCase().split(RegExp('[-_]')).first;
+  return const {'uz', 'ru', 'en'}.contains(normalized) ? normalized : 'uz';
+}
+
+String _statusMessage(int status, String language) => switch (status) {
+  400 => _apiCopy(language, 'status400'),
+  401 => _apiCopy(language, 'status401'),
+  403 => _apiCopy(language, 'status403'),
+  404 => _apiCopy(language, 'status404'),
+  429 => _apiCopy(language, 'status429'),
+  >= 500 => _apiCopy(language, 'status500'),
+  _ => _apiCopy(language, 'statusDefault'),
+};
+
+String _apiCopy(String language, String key) {
+  final values = _apiCopies[key];
+  if (values == null) return key;
+  return values[_normalizeLanguage(language)] ?? values['uz'] ?? key;
+}
+
+const Map<String, Map<String, String>> _apiCopies = {
+  'invalidAddress': {
+    'uz': 'Markaz manzili noto‘g‘ri.',
+    'ru': 'Неверный адрес сервера центра.',
+    'en': 'The center server address is invalid.',
+  },
+  'requiresHttps': {
+    'uz': 'Markaz manzili HTTPS orqali himoyalangan bo‘lishi kerak.',
+    'ru': 'Адрес сервера центра должен быть защищён с помощью HTTPS.',
+    'en': 'The center server address must be protected with HTTPS.',
+  },
+  'uploadFailed': {
+    'uz': 'Fayl serverga yuklanmadi.',
+    'ru': 'Не удалось загрузить файл на сервер.',
+    'en': 'The file could not be uploaded to the server.',
+  },
+  'downloadFailed': {
+    'uz': 'Faylni serverdan olib bo‘lmadi.',
+    'ru': 'Не удалось получить файл с сервера.',
+    'en': 'The file could not be downloaded from the server.',
+  },
+  'uploadTimeout': {
+    'uz': 'Faylni yuklash vaqti tugadi. Qayta urinib ko‘ring.',
+    'ru': 'Время загрузки файла истекло. Попробуйте ещё раз.',
+    'en': 'The file upload timed out. Please try again.',
+  },
+  'uploadConnection': {
+    'uz': 'Fayl serveriga ulanib bo‘lmadi.',
+    'ru': 'Не удалось подключиться к файловому серверу.',
+    'en': 'Could not connect to the file server.',
+  },
+  'timeout': {
+    'uz': 'Server javob bermadi. Internet va markaz manzilini tekshiring.',
+    'ru': 'Сервер не отвечает. Проверьте интернет и адрес сервера центра.',
+    'en':
+        'The server did not respond. Check your connection and server address.',
+  },
+  'connectionWeb': {
+    'uz': 'Serverga ulanib bo‘lmadi. Manzil va CORS sozlamasini tekshiring.',
+    'ru':
+        'Не удалось подключиться к серверу. Проверьте адрес и настройки CORS.',
+    'en':
+        'Could not connect to the server. Check the address and CORS settings.',
+  },
+  'connection': {
+    'uz': 'Serverga ulanib bo‘lmadi. Internetni tekshiring.',
+    'ru': 'Не удалось подключиться к серверу. Проверьте интернет.',
+    'en': 'Could not connect to the server. Check your internet connection.',
+  },
+  'invalidResponse': {
+    'uz': 'Server noto‘g‘ri formatda javob berdi.',
+    'ru': 'Сервер вернул ответ в неверном формате.',
+    'en': 'The server returned an invalid response format.',
+  },
+  'status400': {
+    'uz': 'Kiritilgan ma’lumotlarni tekshiring.',
+    'ru': 'Проверьте введённые данные.',
+    'en': 'Check the entered information.',
+  },
+  'status401': {
+    'uz': 'Sessiya tugagan. Qayta kiring.',
+    'ru': 'Сессия завершена. Войдите снова.',
+    'en': 'Your session has expired. Sign in again.',
+  },
+  'status403': {
+    'uz': 'Bu amal uchun ruxsat yo‘q.',
+    'ru': 'Недостаточно прав для этого действия.',
+    'en': 'You do not have permission for this action.',
+  },
+  'status404': {
+    'uz': 'Ma’lumot topilmadi.',
+    'ru': 'Данные не найдены.',
+    'en': 'The requested information was not found.',
+  },
+  'status429': {
+    'uz': 'Juda ko‘p urinish. Birozdan keyin qayta urinib ko‘ring.',
+    'ru': 'Слишком много попыток. Повторите немного позже.',
+    'en': 'Too many attempts. Please try again later.',
+  },
+  'status500': {
+    'uz': 'Serverda vaqtinchalik xatolik yuz berdi.',
+    'ru': 'На сервере произошла временная ошибка.',
+    'en': 'A temporary server error occurred.',
+  },
+  'statusDefault': {
+    'uz': 'So‘rov bajarilmadi.',
+    'ru': 'Не удалось выполнить запрос.',
+    'en': 'The request could not be completed.',
+  },
 };

@@ -7,38 +7,53 @@ import 'package:flutter/material.dart';
 /// archived prototype screens, while the active application consumes the
 /// colors through [ThemeData].
 class Sf {
-  static const bg = Color(0xFFF1EFE6);
-  static const surface = Color(0xFFFAF8EF);
-  static const surface2 = Color(0xFFE5E4D2);
-  static const surface3 = Color(0xFFD7D5BD);
-  static const ink = Color(0xFF1A1E18);
-  static const ink2 = Color(0xFF2F352A);
-  static const muted = Color(0xFF6F7264);
-  static const muted2 = Color(0xFFA2A593);
-  static const border = Color(0xFFD9D6BD);
-  static const borderStrong = Color(0xFFB7B399);
-  static const primary = Color(0xFF4F6A3A);
-  static const primaryHover = Color(0xFF3E5A29);
-  static const primarySoft = Color(0xFFDBE5C7);
-  static const primaryInk = Color(0xFF324D22);
-  static const accent = Color(0xFFBA8C2C);
-  static const accentSoft = Color(0xFFF0E1BB);
-  static const accentInk = Color(0xFF674A0D);
-  static const success = Color(0xFF4F7B3B);
-  static const successSoft = Color(0xFFDDE9CE);
-  static const warn = Color(0xFFC68423);
-  static const warnSoft = Color(0xFFF5E2BF);
-  static const danger = Color(0xFFB33A2A);
-  static const dangerSoft = Color(0xFFF3D8D0);
-  static const ai = Color(0xFF77551B);
-  static const aiBg1 = Color(0xFFF3E9D0);
-  static const aiBg2 = Color(0xFFE9D6AA);
-  static const aiBorder = Color(0xFFC9AD70);
+  static const bg = Color(0xFFF6F7FC);
+  static const surface = Color(0xFFFFFFFF);
+  static const surface2 = Color(0xFFF0F2F9);
+  static const surface3 = Color(0xFFE7EAF5);
+  static const ink = Color(0xFF171A2C);
+  static const ink2 = Color(0xFF3F455C);
+  static const muted = Color(0xFF697089);
+  static const muted2 = Color(0xFFA4A9BA);
+  static const border = Color(0xFFE2E5EF);
+  static const borderStrong = Color(0xFFC9CEDD);
+  static const primary = Color(0xFF5B5CE2);
+  static const primaryHover = Color(0xFF4849C8);
+  static const primarySoft = Color(0xFFE7E7FF);
+  static const primaryInk = Color(0xFF3435A4);
+  static const accent = Color(0xFFFF7A59);
+  static const accentSoft = Color(0xFFFFE7DF);
+  static const accentInk = Color(0xFF9A351D);
+  static const success = Color(0xFF009B74);
+  static const successSoft = Color(0xFFDDF7EE);
+  static const warn = Color(0xFFE09A24);
+  static const warnSoft = Color(0xFFFFF0D2);
+  static const danger = Color(0xFFD6455D);
+  static const dangerSoft = Color(0xFFFFE1E6);
+  static const ai = Color(0xFF7559D9);
+  static const aiBg1 = Color(0xFFF1EDFF);
+  static const aiBg2 = Color(0xFFE4DCFF);
+  static const aiBorder = Color(0xFFB9A8F5);
   static const goldUp = accentInk;
 
   static const ui = 'Manrope';
   static const display = 'InstrumentSerif';
   static const mono = 'JetBrainsMono';
+
+  static const paletteColors = <(Color, Color)>[
+    (Color(0xFF5B5CE2), Color(0xFFFF7A59)),
+    (Color(0xFF1F6B66), Color(0xFFC4892F)),
+    (Color(0xFF2A3D8F), Color(0xFFD8A22A)),
+    (Color(0xFFB85535), Color(0xFFD89A2E)),
+    (Color(0xFFC2410C), Color(0xFFD6608A)),
+    (Color(0xFF0E7C5A), Color(0xFFC08A2E)),
+    (Color(0xFFB3122F), Color(0xFFC28A1E)),
+    (Color(0xFF2563A8), Color(0xFFD98A4E)),
+    (Color(0xFFB8791C), Color(0xFF3F7A6A)),
+    (Color(0xFF2B2A26), Color(0xFF9A7B3F)),
+  ];
+
+  static const selectableFonts = <String>[ui, display, mono];
 
   static const radiusSmall = 8.0;
   static const radiusMedium = 14.0;
@@ -50,66 +65,104 @@ class Sf {
     BoxShadow(color: Color(0x0A101828), blurRadius: 6, offset: Offset(0, 2)),
   ];
 
-  static ThemeData theme({bool highContrast = false}) =>
-      _theme(Brightness.light, highContrast: highContrast);
+  static ThemeData theme({
+    bool highContrast = false,
+    int paletteIndex = 0,
+    int fontIndex = 0,
+    VisualDensity visualDensity = VisualDensity.standard,
+  }) => _theme(
+    Brightness.light,
+    highContrast: highContrast,
+    paletteIndex: paletteIndex,
+    fontIndex: fontIndex,
+    visualDensity: visualDensity,
+  );
 
-  static ThemeData darkTheme({bool highContrast = false}) =>
-      _theme(Brightness.dark, highContrast: highContrast);
+  static ThemeData darkTheme({
+    bool highContrast = false,
+    int paletteIndex = 0,
+    int fontIndex = 0,
+    VisualDensity visualDensity = VisualDensity.standard,
+  }) => _theme(
+    Brightness.dark,
+    highContrast: highContrast,
+    paletteIndex: paletteIndex,
+    fontIndex: fontIndex,
+    visualDensity: visualDensity,
+  );
 
-  static ThemeData _theme(Brightness brightness, {required bool highContrast}) {
+  static ThemeData _theme(
+    Brightness brightness, {
+    required bool highContrast,
+    required int paletteIndex,
+    required int fontIndex,
+    required VisualDensity visualDensity,
+  }) {
     final dark = brightness == Brightness.dark;
+    final palette =
+        paletteColors[paletteIndex.clamp(0, paletteColors.length - 1)];
+    final selectedPrimary = palette.$1;
+    final selectedAccent = palette.$2;
+    final selectedFont =
+        selectableFonts[fontIndex.clamp(0, selectableFonts.length - 1)];
+    final darkPrimary = Color.lerp(selectedPrimary, Colors.white, .58)!;
+    final darkAccent = Color.lerp(selectedAccent, Colors.white, .42)!;
     final scheme = ColorScheme(
       brightness: brightness,
-      primary: dark ? const Color(0xFFB7D29A) : primary,
-      onPrimary: dark ? const Color(0xFF203313) : Colors.white,
-      primaryContainer: dark ? const Color(0xFF344729) : primarySoft,
-      onPrimaryContainer: dark ? const Color(0xFFDDEFC7) : primaryInk,
-      secondary: dark ? const Color(0xFFE3BD6A) : accent,
-      onSecondary: dark ? const Color(0xFF3C2B08) : const Color(0xFF332100),
-      secondaryContainer: dark ? const Color(0xFF4B3B1E) : accentSoft,
-      onSecondaryContainer: dark ? const Color(0xFFF5DEA8) : accentInk,
+      primary: dark ? darkPrimary : selectedPrimary,
+      onPrimary: dark ? const Color(0xFF20214D) : Colors.white,
+      primaryContainer: dark
+          ? Color.lerp(selectedPrimary, const Color(0xFF211D17), .56)!
+          : Color.lerp(selectedPrimary, Colors.white, .78)!,
+      onPrimaryContainer: dark ? const Color(0xFFE7E7FF) : primaryInk,
+      secondary: dark ? darkAccent : selectedAccent,
+      onSecondary: dark ? const Color(0xFF542014) : const Color(0xFF3F140B),
+      secondaryContainer: dark
+          ? Color.lerp(selectedAccent, const Color(0xFF211D17), .62)!
+          : Color.lerp(selectedAccent, Colors.white, .76)!,
+      onSecondaryContainer: dark ? const Color(0xFFFFE7DF) : accentInk,
       error: dark ? const Color(0xFFFFB4A8) : danger,
       onError: dark ? const Color(0xFF680007) : Colors.white,
       errorContainer: dark ? const Color(0xFF5B2520) : dangerSoft,
       onErrorContainer: dark
           ? const Color(0xFFFFDAD4)
           : const Color(0xFF5D160D),
-      surface: dark ? const Color(0xFF1D1914) : surface,
-      onSurface: dark ? const Color(0xFFF0EBDD) : ink,
+      surface: dark ? const Color(0xFF1B1D2B) : surface,
+      onSurface: dark ? const Color(0xFFF2F3FA) : ink,
       surfaceContainerLowest: dark
-          ? const Color(0xFF14110D)
-          : const Color(0xFFF7F5EB),
+          ? const Color(0xFF12131D)
+          : const Color(0xFFFAFBFF),
       surfaceContainerLow: dark
-          ? const Color(0xFF211D17)
-          : const Color(0xFFF3F1E7),
-      surfaceContainer: dark ? const Color(0xFF29241D) : surface2,
-      surfaceContainerHigh: dark ? const Color(0xFF332D24) : surface3,
+          ? const Color(0xFF202230)
+          : const Color(0xFFF4F5FA),
+      surfaceContainer: dark ? const Color(0xFF282A3A) : surface2,
+      surfaceContainerHigh: dark ? const Color(0xFF303344) : surface3,
       surfaceContainerHighest: dark
-          ? const Color(0xFF40382D)
-          : const Color(0xFFCECBB2),
-      onSurfaceVariant: dark ? const Color(0xFFC9C0AF) : ink2,
+          ? const Color(0xFF3A3E52)
+          : const Color(0xFFDDE0EC),
+      onSurfaceVariant: dark ? const Color(0xFFC7CAD8) : ink2,
       outline: highContrast
-          ? (dark ? const Color(0xFFD3CAB8) : const Color(0xFF777561))
-          : (dark ? const Color(0xFF6D6252) : borderStrong),
+          ? (dark ? const Color(0xFFD9DCEC) : const Color(0xFF6C7289))
+          : (dark ? const Color(0xFF666B81) : borderStrong),
       outlineVariant: highContrast
-          ? (dark ? const Color(0xFF8B7E69) : borderStrong)
-          : (dark ? const Color(0xFF443C31) : border),
-      shadow: const Color(0xFF14110D),
+          ? (dark ? const Color(0xFF858A9F) : borderStrong)
+          : (dark ? const Color(0xFF424658) : border),
+      shadow: const Color(0xFF10121D),
       scrim: const Color(0x99000000),
-      inverseSurface: dark ? const Color(0xFFF0EBDD) : ink,
+      inverseSurface: dark ? const Color(0xFFF2F3FA) : ink,
       onInverseSurface: dark ? ink : Colors.white,
-      inversePrimary: dark ? primary : const Color(0xFFB7D29A),
+      inversePrimary: dark ? selectedPrimary : darkPrimary,
       surfaceTint: Colors.transparent,
     );
 
     final base = ThemeData(
       useMaterial3: true,
       brightness: brightness,
-      fontFamily: ui,
+      fontFamily: selectedFont,
       colorScheme: scheme,
-      scaffoldBackgroundColor: dark ? const Color(0xFF14110D) : bg,
+      scaffoldBackgroundColor: dark ? const Color(0xFF12131D) : bg,
       splashFactory: InkRipple.splashFactory,
-      visualDensity: VisualDensity.standard,
+      visualDensity: visualDensity,
     );
     final focusBorder = OutlineInputBorder(
       borderRadius: BorderRadius.circular(radiusMedium),
@@ -125,20 +178,18 @@ class Sf {
           .apply(bodyColor: scheme.onSurface, displayColor: scheme.onSurface)
           .copyWith(
             headlineLarge: t(
-              size: 31,
-              weight: FontWeight.w400,
+              size: 28,
+              weight: FontWeight.w800,
               color: scheme.onSurface,
-              height: 1.05,
-              family: display,
-              style: FontStyle.italic,
+              height: 1.1,
+              family: selectedFont,
             ),
             headlineMedium: t(
-              size: 24,
-              weight: FontWeight.w400,
+              size: 22,
+              weight: FontWeight.w800,
               color: scheme.onSurface,
-              height: 1.05,
-              family: display,
-              style: FontStyle.italic,
+              height: 1.12,
+              family: selectedFont,
             ),
             titleLarge: t(
               size: 18,

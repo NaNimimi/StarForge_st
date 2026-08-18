@@ -747,7 +747,7 @@ class _ToolkitPageState extends State<ToolkitPage> {
     }
     if (feature.id == 'export_summary') {
       final lines = <String>[
-        'StarForge Family · Aqlli asboblar',
+        'Starforge Family · Aqlli asboblar',
         for (final entry in state.toolkitToggles.entries)
           '${entry.key}: ${entry.value ? 'yoqilgan' : 'o‘chirilgan'}',
         for (final entry in state.toolkitValues.entries)

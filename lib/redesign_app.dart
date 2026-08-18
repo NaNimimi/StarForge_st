@@ -5598,7 +5598,7 @@ class _AchievementsDetail extends StatelessWidget {
             await Clipboard.setData(
               ClipboardData(
                 text:
-                    'StarForge Family\nO‘rtacha: $average%\nEng yaxshi: ${best?.percent ?? 0}%\nTopshiriqlar: $completed/${submissions.length}',
+                    'Starforge Family\nO‘rtacha: $average%\nEng yaxshi: ${best?.percent ?? 0}%\nTopshiriqlar: $completed/${submissions.length}',
               ),
             );
             announce('Hisobot nusxalandi');

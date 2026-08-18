@@ -7,6 +7,11 @@
       "reason": "Loads the role-scoped recipient directory for new student and parent conversations."
     },
     {
+      "method": "GET",
+      "path": "/api/v1/students/{pk}/leadership-profile/",
+      "reason": "Compatibility fallback for deployments that publish a student's legacy photo in identity.photo."
+    },
+    {
       "method": "POST",
       "path": "/api/v1/messaging/attachments/upload-url/",
       "reason": "Creates a scoped upload grant for message files and voice notes."
@@ -20,6 +25,36 @@
       "method": "PATCH",
       "path": "/api/v1/messaging/threads/{pk}/preferences/",
       "reason": "Updates the current participant's notification mute preference."
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/messaging/messages/{pk}/",
+      "reason": "Future messaging contract: edits a message owned by the authenticated sender."
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/messaging/messages/{pk}/",
+      "reason": "Future messaging contract: deletes a message owned by the authenticated sender."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/messaging/messages/{pk}/reactions/",
+      "reason": "Future messaging contract agreed with the backend: adds the authenticated user's emoji reaction."
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/messaging/messages/{pk}/reactions/{emoji}/",
+      "reason": "Future messaging contract agreed with the backend: removes the authenticated user's emoji reaction."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/family-assistant/",
+      "reason": "Loads the authenticated student or guardian-scoped family assistant conversation and learning sources."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/family-assistant/",
+      "reason": "Sends a rate-limited family question using only the caller's student-scoped learning context."
     }
   ]
 }

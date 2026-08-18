@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'portal_i18n.dart';
+import 'portal_preferences.dart';
 import 'push_notification_service.dart';
 import 'starforge_api.dart';
 
@@ -13,6 +15,7 @@ enum PortalSection {
   assignments,
   schedule,
   academics,
+  placement,
   content,
   attendance,
   messages,
@@ -26,13 +29,53 @@ enum PortalSection {
   account,
 }
 
+/// Reads the capability shape used by the current API while retaining support
+/// for older tenants that only publish `permission_codes`.
+Set<String> effectivePermissionCodes(Map<String, Object?> profile) {
+  final effective = profile['effective_permissions'];
+  final raw = _hasPermissionShape(effective)
+      ? effective
+      : profile['permission_codes'];
+  return _permissionValues(raw, revoked: false);
+}
+
+bool _hasPermissionShape(Object? raw) {
+  if (raw is Iterable || raw is String) return true;
+  if (raw is! Map) return false;
+  return const {
+    'permissions',
+    'granted',
+    'permission_codes',
+    'effective',
+  }.any(raw.containsKey);
+}
+
+Set<String> revokedPermissionCodes(Map<String, Object?> profile) {
+  final revoked = <String>{
+    ..._permissionValues(profile['revoked_permission_codes'], revoked: false),
+  };
+  // The live API publishes `effective_permissions` as a flat list of grants.
+  // Only the structured legacy shape can carry embedded revocations. Treating
+  // the list as both granted and revoked hides every permitted destination.
+  if (profile['effective_permissions'] is Map) {
+    revoked.addAll(
+      _permissionValues(profile['effective_permissions'], revoked: true),
+    );
+  }
+  return revoked;
+}
+
 final class PortalController extends ChangeNotifier {
   PortalController({
     SecureSessionStore sessionStore = const SecureSessionStore(),
     StarForgeApi? api,
+    PortalPreferences? preferences,
     bool restoreSession = true,
   }) : _store = sessionStore,
-       _api = api ?? StarForgeApi(baseUrl: defaultApiBaseUrl) {
+       _api = api ?? StarForgeApi(baseUrl: defaultApiBaseUrl),
+       _preferences = preferences ?? PortalPreferences.memory() {
+    _syncPreferences();
+    _preferences.addListener(_syncPreferences);
     if (restoreSession) {
       unawaited(restore());
     } else {
@@ -42,6 +85,9 @@ final class PortalController extends ChangeNotifier {
 
   final SecureSessionStore _store;
   final StarForgeApi _api;
+  final PortalPreferences _preferences;
+
+  PortalPreferences get preferences => _preferences;
 
   AuthPhase phase = AuthPhase.restoring;
   String role = '';
@@ -54,6 +100,7 @@ final class PortalController extends ChangeNotifier {
   final Set<PortalSection> _loaded = {};
   final Set<PortalSection> _loading = {};
   final Map<PortalSection, String> _errors = {};
+  final Map<String, ApiException> _optionalApiFailures = {};
 
   Map<String, Object?> dashboard = const {};
   Map<String, Object?> report = const {};
@@ -86,6 +133,8 @@ final class PortalController extends ChangeNotifier {
   List<Map<String, Object?>> exams = const [];
   List<Map<String, Object?>> grades = const [];
   List<Map<String, Object?>> transcripts = const [];
+  List<Map<String, Object?>> placementAttempts = const [];
+  List<Map<String, Object?>> placementTests = const [];
 
   List<Map<String, Object?>> libraries = const [];
   List<Map<String, Object?>> courses = const [];
@@ -99,6 +148,8 @@ final class PortalController extends ChangeNotifier {
   int unreadNotificationCount = 0;
   List<Map<String, Object?>> notificationPreferences = const [];
   List<Map<String, Object?>> contacts = const [];
+  final Map<int, Map<String, Object?>> messagingContactProfiles = {};
+  final Set<int> _loadingMessagingContactProfiles = {};
   int? messagingSelfUserId;
   List<Map<String, Object?>> threads = const [];
   final Map<int, List<Map<String, Object?>>> messages = {};
@@ -107,8 +158,16 @@ final class PortalController extends ChangeNotifier {
   List<Map<String, Object?>> aiRequests = const [];
   Map<String, Object?> aiBudget = const {};
   Map<String, Object?> aiUsage = const {};
+  List<Map<String, Object?>> aiConversation = const [];
+  List<Map<String, Object?>> aiSources = const [];
+  List<String> aiSuggestions = const [];
+  bool aiReplyBusy = false;
+  String? aiReplyError;
+  bool aiFallbackMode = false;
+  bool aiServiceAvailable = false;
   List<Map<String, Object?>> forms = const [];
   List<Map<String, Object?>> achievementGrants = const [];
+  List<Map<String, Object?>> achievementCatalog = const [];
   List<Map<String, Object?>> rules = const [];
   List<Map<String, Object?>> pendingRules = const [];
   List<Map<String, Object?>> penalties = const [];
@@ -118,6 +177,18 @@ final class PortalController extends ChangeNotifier {
   Map<String, Object?> wallet = const {};
   Map<String, Object?> outstanding = const {};
   List<Map<String, Object?>> devices = const [];
+  final Map<int, Map<String, Object?>> assignmentDetails = {};
+  final Map<int, Map<String, Object?>> submissionDetails = {};
+  final Map<int, Map<String, Object?>> attendanceRecordDetails = {};
+  final Map<int, Map<String, Object?>> scheduleLessonDetails = {};
+  final Map<int, Map<String, Object?>> examDetails = {};
+  final Map<int, Map<String, Object?>> gradeDetails = {};
+  final Map<int, Map<String, Object?>> transcriptDetails = {};
+  final Map<int, Map<String, Object?>> placementAttemptDetails = {};
+  final Map<int, List<Map<String, Object?>>> placementSuggestions = {};
+  final Map<int, Map<String, Object?>> achievementDetails = {};
+  final Map<int, Map<String, Object?>> cardDetails = {};
+  final Map<String, Map<int, Map<String, Object?>>> contentDetails = {};
   DateTime? lastSuccessfulSyncAt;
   bool connectionIssue = false;
 
@@ -130,18 +201,17 @@ final class PortalController extends ChangeNotifier {
     'username',
   ], fallback: isParent ? 'Ota-ona' : 'O‘quvchi');
 
-  Set<String> get permissions {
-    final raw = profile['permission_codes'];
-    if (raw is! List) return const {};
-    return {for (final value in raw) '$value'};
-  }
+  Set<String> get permissions => effectivePermissionCodes(profile);
+  Set<String> get revokedPermissions => revokedPermissionCodes(profile);
+
+  Map<String, ApiException> get optionalApiFailures =>
+      Map<String, ApiException>.unmodifiable(_optionalApiFailures);
+
+  ApiException? optionalApiFailure(String path) => _optionalApiFailures[path];
 
   bool can(String permission) {
-    final separator = permission.indexOf(':');
-    final wildcard = separator < 0
-        ? '$permission:*'
-        : '${permission.substring(0, separator)}:*';
-    return permissions.contains(permission) || permissions.contains(wildcard);
+    if (_permissionSetAllows(revokedPermissions, permission)) return false;
+    return _permissionSetAllows(permissions, permission);
   }
 
   bool isLoading(PortalSection section) => _loading.contains(section);
@@ -217,8 +287,11 @@ final class PortalController extends ChangeNotifier {
       final data = result.object;
       final access = _sessionAccess(result.data);
       if (access.isEmpty) {
-        throw const ApiException(
-          message: 'Server sessiya kalitini qaytarmadi.',
+        throw ApiException(
+          message: portalText(
+            _preferences.language,
+            'error.invalidLoginResponse',
+          ),
           code: 'invalid_login_response',
         );
       }
@@ -246,7 +319,10 @@ final class PortalController extends ChangeNotifier {
     } on ApiException catch (error) {
       authenticationError = error.message;
     } on Object {
-      authenticationError = 'Kirish vaqtida kutilmagan xatolik yuz berdi.';
+      authenticationError = portalText(
+        _preferences.language,
+        'error.unexpectedLogin',
+      );
     }
     _api.accessToken = null;
     role = '';
@@ -256,7 +332,11 @@ final class PortalController extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    // Stop token-refresh callbacks before remote teardown. Otherwise a refresh
+    // racing logout could recreate the device registration.
+    PushNotificationService.instance.unbindAuthenticatedSession();
     if (_api.accessToken != null) {
+      await _revokePushRegistrations();
       try {
         await _api.post('/api/v1/auth/logout/', body: const {});
       } on Object {
@@ -264,6 +344,35 @@ final class PortalController extends ChangeNotifier {
       }
     }
     await _expireSession();
+  }
+
+  Future<void> _revokePushRegistrations() async {
+    try {
+      var ownedDevices = devices;
+      try {
+        ownedDevices = (await _getAllPages(
+          '/api/v1/users/devices/',
+          query: const {'page_size': 100},
+        )).rows;
+      } on Object {
+        // Fall back to the already loaded account-device list when the listing
+        // endpoint is temporarily unavailable.
+      }
+      final ids = ownedDevices
+          .map((item) => _integer(item['id']))
+          .whereType<int>()
+          .toSet();
+      for (final id in ids) {
+        try {
+          await _api.delete('/api/v1/users/devices/$id/');
+        } on Object {
+          // Best-effort cleanup must never trap the user inside the app.
+        }
+      }
+    } on Object {
+      // Local/offline logout must remain available. When reachable, the backend
+      // logout endpoint also invalidates every token belonging to this account.
+    }
   }
 
   Future<void> _expireSession() async {
@@ -308,10 +417,62 @@ final class PortalController extends ChangeNotifier {
     Map<String, Object?> query = const {},
   }) async {
     try {
-      return await _api.get(path, query: query);
+      final result = await _api.get(path, query: query);
+      _optionalApiFailures.remove(path);
+      return result;
     } on ApiException catch (error) {
       if (error.isUnauthorized) rethrow;
-      return const ApiResult(data: null);
+      _optionalApiFailures[path] = error;
+      return ApiResult.failed(error);
+    }
+  }
+
+  /// Drains a page-number endpoint using only the server's finite page/count
+  /// metadata. Cursor feeds (notably notifications and messaging) deliberately
+  /// do not use this helper, so a `next` URL can never trigger an accidental
+  /// unbounded crawl.
+  Future<ApiResult> _getAllPages(
+    String path, {
+    Map<String, Object?> query = const {},
+  }) async {
+    final first = await _api.get(path, query: query);
+    final firstRows = first.rows;
+    final info = first.pageInfo;
+    final requestedPageSize = _integer(query['page_size']);
+    final pageSize = info.pageSize ?? requestedPageSize;
+    final currentPage = info.page ?? _integer(query['page']) ?? 1;
+    final totalPages =
+        info.totalPages ??
+        (info.total != null && pageSize != null && pageSize > 0
+            ? (info.total! / pageSize).ceil()
+            : null);
+    if (firstRows.isEmpty ||
+        totalPages == null ||
+        totalPages <= currentPage ||
+        currentPage < 1) {
+      return first;
+    }
+
+    final rows = <Map<String, Object?>>[...firstRows];
+    for (var page = currentPage + 1; page <= totalPages; page++) {
+      final result = await _api.get(path, query: {...query, 'page': page});
+      rows.addAll(result.rows);
+    }
+    return ApiResult(data: rows, pagination: first.pagination);
+  }
+
+  Future<ApiResult> _optionalGetAllPages(
+    String path, {
+    Map<String, Object?> query = const {},
+  }) async {
+    try {
+      final result = await _getAllPages(path, query: query);
+      _optionalApiFailures.remove(path);
+      return result;
+    } on ApiException catch (error) {
+      if (error.isUnauthorized) rethrow;
+      _optionalApiFailures[path] = error;
+      return ApiResult.failed(error);
     }
   }
 
@@ -328,6 +489,7 @@ final class PortalController extends ChangeNotifier {
         PortalSection.assignments => _loadAssignments(),
         PortalSection.schedule => _loadSchedule(),
         PortalSection.academics => _loadAcademics(),
+        PortalSection.placement => _loadPlacement(),
         PortalSection.content => _loadContent(),
         PortalSection.attendance => _loadAttendance(),
         PortalSection.messages => _loadMessaging(),
@@ -362,6 +524,23 @@ final class PortalController extends ChangeNotifier {
   Future<void> refresh(PortalSection section) =>
       loadSection(section, force: true);
 
+  /// Read-only escape hatch for paged/detail family endpoints. Mutating API
+  /// operations remain explicit controller methods so callers cannot bypass
+  /// refresh and permission handling accidentally.
+  Future<ApiResult> getApi(
+    String path, {
+    Map<String, Object?> query = const {},
+  }) {
+    if (!path.startsWith('/api/v1/')) {
+      throw ArgumentError.value(path, 'path', 'Expected an /api/v1/ path.');
+    }
+    return _api.get(path, query: query);
+  }
+
+  /// Notifies widgets after a caller appends a page to one of the controller's
+  /// observable lists using [getApi].
+  void notifyDataChanged() => notifyListeners();
+
   Future<void> _loadHome() async {
     await _loadProfile();
     if (isStudent) {
@@ -388,27 +567,29 @@ final class PortalController extends ChangeNotifier {
       await _loadSelectedChild();
       await _refreshUnreadNotificationCount();
     }
+    if (can('messaging:read')) {
+      final result = await _optionalGet(
+        '/api/v1/messaging/threads/',
+        query: const {'page_size': 20},
+      );
+      if (result.isSuccessful) threads = result.rows;
+    }
   }
 
   Future<void> _refreshUnreadNotificationCount() async {
-    try {
-      unreadNotificationCount =
-          _integer(
-            (await _api.get(
-              '/api/v1/notifications/unread-count/',
-            )).object['count'],
-          ) ??
-          0;
-    } on ApiException {
+    final result = await _optionalGet('/api/v1/notifications/unread-count/');
+    if (result.isFailed) {
       unreadNotificationCount = notifications
           .where((item) => item['read_at'] == null)
           .length;
+      return;
     }
+    unreadNotificationCount = _integer(result.object['count']) ?? 0;
   }
 
   Future<void> _loadIdentity() async {
     if (isStudent) {
-      final studentRows = (await _api.get(
+      final studentRows = (await _getAllPages(
         '/api/v1/students/',
         query: const {'page_size': 25},
       )).rows;
@@ -426,10 +607,14 @@ final class PortalController extends ChangeNotifier {
           _optionalGet('/api/v1/students/$studentId/events/'),
         _optionalGet('/api/v1/students/stats/'),
         _optionalGet(
+          '/api/v1/students/comparison/',
+          query: const {'metric': 'joined', 'unit': 'month'},
+        ),
+        _optionalGetAllPages(
           '/api/v1/students/birthdays/',
           query: const {'page_size': 25},
         ),
-        _optionalGet(
+        _optionalGetAllPages(
           '/api/v1/students/enrollment-reasons/',
           query: const {'page_size': 100},
         ),
@@ -443,38 +628,61 @@ final class PortalController extends ChangeNotifier {
         studentEvents = const [];
       }
       studentStats = values[index++].object;
-      studentComparison = const {};
+      studentComparison = values[index++].object;
       birthdays = values[index++].rows;
       enrollmentReasons = values[index].rows;
       return;
     }
 
-    final values = await Future.wait([
-      _api.get('/api/v1/parents/', query: const {'page_size': 25}),
-      _optionalGet(
-        '/api/v1/parents/guardians/',
-        query: const {'page_size': 100},
-      ),
-      _optionalGet('/api/v1/parents/pickups/', query: const {'page_size': 100}),
-      if (children.isEmpty) _api.get('/api/v1/parents/me/children/'),
-    ]);
-    final parentRows = values[0].rows;
-    final profileUserId = _integer(profile['id']);
-    parentProfile =
-        parentRows
-            .where(
-              (item) =>
-                  _integer(item['user'] ?? item['user_id']) == profileUserId,
-            )
-            .firstOrNull ??
-        parentRows.firstOrNull ??
-        const {};
-    guardians = values[1].rows;
-    pickups = values[2].rows;
-    if (children.isEmpty && values.length > 3) children = values[3].rows;
-    final studentId =
-        selectedStudentId ?? _integer(children.firstOrNull?['id']);
+    if (children.isEmpty) {
+      children = (await _api.get('/api/v1/parents/me/children/')).rows;
+    }
+    final childIds = children
+        .map((item) => _integer(item['id']))
+        .whereType<int>()
+        .toSet();
+    final studentId = childIds.contains(selectedStudentId)
+        ? selectedStudentId
+        : childIds.firstOrNull;
     selectedStudentId = studentId;
+
+    final principalId = _integer(profile['id']);
+    final roleNativeProfile =
+        '${profile['principal_kind'] ?? ''}'.toLowerCase() == 'parent';
+    if (roleNativeProfile && principalId != null) {
+      parentProfile = (await _api.get('/api/v1/parents/$principalId/')).object;
+    } else {
+      final parentRows = (await _getAllPages(
+        '/api/v1/parents/',
+        query: const {'page_size': 100},
+      )).rows;
+      final username = '${profile['username'] ?? ''}'.trim();
+      parentProfile =
+          parentRows
+              .where(
+                (item) =>
+                    (principalId != null &&
+                        _integer(item['id']) == principalId) ||
+                    (username.isNotEmpty && '${item['username']}' == username),
+              )
+              .firstOrNull ??
+          (parentRows.length == 1 ? parentRows.first : const {});
+    }
+
+    final parentId = _integer(parentProfile['id']) ?? principalId;
+    final familyValues = await Future.wait([
+      _optionalGetAllPages(
+        '/api/v1/parents/guardians/',
+        query: {'page_size': 100, 'parent': ?parentId, 'student': ?studentId},
+      ),
+      _optionalGetAllPages(
+        '/api/v1/parents/pickups/',
+        query: {'page_size': 100, 'student': ?studentId},
+      ),
+    ]);
+    guardians = familyValues[0].rows;
+    pickups = familyValues[1].rows;
+
     if (studentId != null) {
       final childValues = await Future.wait([
         _api.get('/api/v1/students/$studentId/'),
@@ -511,9 +719,12 @@ final class PortalController extends ChangeNotifier {
         PortalSection.finance,
         PortalSection.attendance,
         PortalSection.academics,
+        PortalSection.placement,
         PortalSection.content,
+        PortalSection.ai,
         PortalSection.achievements,
         PortalSection.discipline,
+        PortalSection.cards,
       });
     } on ApiException catch (error) {
       if (generation == _childSelectionGeneration) {
@@ -564,17 +775,53 @@ final class PortalController extends ChangeNotifier {
     }
     final cohortId = _selectedCohortId;
     final values = await Future.wait([
-      _api.get(
+      _getAllPages(
         '/api/v1/assignments/',
         query: {'page_size': 100, if (isParent) 'cohort': ?cohortId},
       ),
-      _api.get(
+      _getAllPages(
         '/api/v1/assignments/submissions/',
         query: const {'page_size': 100},
       ),
     ]);
     assignments = values[0].rows;
     submissions = _selectedStudentRows(values[1].rows);
+  }
+
+  Future<void> _loadPlacement() async {
+    // The deployed API currently scopes attempts to staff or the student who
+    // owns them. Parents cannot read a linked child's attempts yet, so avoid a
+    // misleading request/empty state until the backend adds guardian scoping.
+    if (isParent) {
+      placementAttempts = const [];
+      placementTests = const [];
+      return;
+    }
+
+    // Attempt list/detail are authenticated SELF actions. The backend applies
+    // row-level scoping, so a student can never read somebody else's attempt.
+    placementAttempts = _selectedStudentRows(
+      (await _getAllPages(
+        '/api/v1/placement/attempts/',
+        query: {
+          'page_size': 100,
+          if (isParent && selectedStudentId != null)
+            'student': selectedStudentId,
+        },
+      )).rows,
+    );
+
+    // Full test definitions contain answer keys and are staff-protected. Family
+    // accounts only request them when the backend explicitly grants capability.
+    if (can('placement:read') || can('placement:write')) {
+      final tests = await _optionalGetAllPages(
+        '/api/v1/placement/tests/',
+        query: const {'page_size': 100},
+      );
+      placementTests = tests.isSuccessful ? tests.rows : const [];
+    } else {
+      placementTests = const [];
+    }
   }
 
   Future<void> _loadSchedule() async {
@@ -596,7 +843,7 @@ final class PortalController extends ChangeNotifier {
         ? _integer(selectedChild?['current_cohort'])
         : null;
     final values = await Future.wait([
-      _api.get(
+      _getAllPages(
         '/api/v1/schedule/lessons/',
         query: {
           'page_size': 100,
@@ -606,16 +853,22 @@ final class PortalController extends ChangeNotifier {
           'cohort': ?selectedCohortId,
         },
       ),
-      _optionalGet('/api/v1/schedule/terms/', query: const {'page_size': 100}),
-      _optionalGet(
+      _optionalGetAllPages(
+        '/api/v1/schedule/terms/',
+        query: const {'page_size': 100},
+      ),
+      _optionalGetAllPages(
         '/api/v1/schedule/timeslots/',
         query: const {'page_size': 100},
       ),
-      _optionalGet(
+      _optionalGetAllPages(
         '/api/v1/schedule/lesson-types/',
         query: const {'page_size': 100},
       ),
-      _optionalGet('/api/v1/schedule/rules/', query: const {'page_size': 100}),
+      _optionalGetAllPages(
+        '/api/v1/schedule/rules/',
+        query: const {'page_size': 100},
+      ),
       _optionalGet('/api/v1/schedule/ical-url/'),
     ]);
     lessons = values[0].rows;
@@ -629,7 +882,7 @@ final class PortalController extends ChangeNotifier {
   Future<void> _loadAttendance() async {
     final studentId = selectedStudentId;
     final values = await Future.wait([
-      _api.get(
+      _getAllPages(
         '/api/v1/attendance/records/',
         query: {
           'page_size': 100,
@@ -638,7 +891,7 @@ final class PortalController extends ChangeNotifier {
         },
       ),
       if (terms.isEmpty)
-        _optionalGet(
+        _optionalGetAllPages(
           '/api/v1/schedule/terms/',
           query: const {'page_size': 100},
         ),
@@ -663,28 +916,28 @@ final class PortalController extends ChangeNotifier {
     final studentId = selectedStudentId;
     final cohortId = _selectedCohortId;
     final values = await Future.wait([
-      _optionalGet(
+      _optionalGetAllPages(
         '/api/v1/academics/subjects/',
         query: const {'page_size': 100},
       ),
-      _optionalGet(
+      _optionalGetAllPages(
         '/api/v1/academics/exam-types/',
         query: const {'page_size': 100},
       ),
-      _optionalGet(
+      _optionalGetAllPages(
         '/api/v1/academics/exams/',
         query: {'page_size': 100, if (isParent) 'cohort': ?cohortId},
       ),
-      _api.get(
+      _getAllPages(
         '/api/v1/academics/grades/',
         query: {'page_size': 100, if (isParent) 'student': ?studentId},
       ),
-      _optionalGet(
+      _optionalGetAllPages(
         '/api/v1/academics/transcripts/',
         query: const {'page_size': 100},
       ),
       if (terms.isEmpty)
-        _optionalGet(
+        _optionalGetAllPages(
           '/api/v1/schedule/terms/',
           query: const {'page_size': 100},
         ),
@@ -699,16 +952,28 @@ final class PortalController extends ChangeNotifier {
 
   Future<void> _loadContent() async {
     final values = await Future.wait([
-      _optionalGet(
+      _optionalGetAllPages(
         '/api/v1/content/libraries/',
         query: const {'page_size': 100},
       ),
-      _api.get('/api/v1/content/courses/', query: const {'page_size': 100}),
-      _optionalGet('/api/v1/content/modules/', query: const {'page_size': 100}),
-      _optionalGet('/api/v1/content/lessons/', query: const {'page_size': 100}),
-      _optionalGet('/api/v1/content/folders/', query: const {'page_size': 100}),
-      _optionalGet('/api/v1/content/files/', query: const {'page_size': 100}),
-      _optionalGet(
+      _getAllPages('/api/v1/content/courses/', query: const {'page_size': 100}),
+      _optionalGetAllPages(
+        '/api/v1/content/modules/',
+        query: const {'page_size': 100},
+      ),
+      _optionalGetAllPages(
+        '/api/v1/content/lessons/',
+        query: const {'page_size': 100},
+      ),
+      _optionalGetAllPages(
+        '/api/v1/content/folders/',
+        query: const {'page_size': 100},
+      ),
+      _optionalGetAllPages(
+        '/api/v1/content/files/',
+        query: const {'page_size': 100},
+      ),
+      _optionalGetAllPages(
         '/api/v1/content/materials/',
         query: const {'page_size': 100},
       ),
@@ -754,21 +1019,138 @@ final class PortalController extends ChangeNotifier {
   }
 
   Future<void> _loadAi() async {
-    aiRequests = (await _api.get(
-      '/api/v1/ai/requests/',
-      query: const {'page_size': 50, 'ordering': '-created_at'},
-    )).rows;
-    try {
-      aiBudget = (await _api.get('/api/v1/ai/budget/')).object;
-    } on ApiException {
-      aiBudget = const {};
+    final result = await _optionalGet(
+      '/api/v1/ai/family-assistant/',
+      query: {
+        if (isParent && selectedStudentId != null) 'student': selectedStudentId,
+      },
+    );
+    if (result.isSuccessful) {
+      final data = result.object;
+      aiServiceAvailable = true;
+      aiConversation = valueRows(data['history']);
+      aiSources = valueRows(data['sources']);
+      aiSuggestions = _stringRows(data['suggestions']);
+      aiFallbackMode = data['fallback_used'] == true;
+      if (aiConversation.isEmpty) {
+        aiConversation = [_familyAssistantWelcome()];
+      }
+      if (aiSuggestions.isEmpty) {
+        aiSuggestions = _familyAssistantSuggestions();
+      }
+      aiReplyError = null;
+      return;
     }
+
+    final failure = result.failure;
+    if (_familyAssistantFallbackEligible(failure)) {
+      // The AI page renders its own clear unavailable state. Avoid duplicating
+      // that state in the global optional-endpoint warning banner.
+      _optionalApiFailures.remove('/api/v1/ai/family-assistant/');
+    }
+
+    aiServiceAvailable = false;
+    aiFallbackMode = false;
+    aiConversation = const [];
+    aiSources = const [];
+    aiSuggestions = const [];
+    aiReplyError =
+        'AI yordamchi hali markaz tomonidan ulanmagan. Hozircha bu funksiya ishlamaydi.';
+  }
+
+  Future<void> askFamilyAssistant(String rawMessage) async {
+    final message = rawMessage.trim();
+    if (message.isEmpty || aiReplyBusy) return;
+    if (!aiServiceAvailable) {
+      aiReplyError =
+          'AI yordamchi hali markaz tomonidan ulanmagan. Hozircha bu funksiya ishlamaydi.';
+      notifyListeners();
+      return;
+    }
+    final optimisticId = 'local-user-${DateTime.now().microsecondsSinceEpoch}';
+    aiConversation = [
+      ...aiConversation,
+      {
+        'id': optimisticId,
+        'role': 'user',
+        'content': message,
+        'created_at': DateTime.now().toIso8601String(),
+      },
+    ];
+    aiReplyBusy = true;
+    aiReplyError = null;
+    notifyListeners();
     try {
-      aiUsage = (await _api.get('/api/v1/ai/usage-report/')).object;
-    } on ApiException {
-      aiUsage = const {};
+      final result = await _api.post(
+        '/api/v1/ai/family-assistant/',
+        body: {
+          'message': message,
+          if (isParent && selectedStudentId != null)
+            'student': selectedStudentId,
+        },
+      );
+      final data = result.object;
+      final serverHistory = valueRows(data['history']);
+      final answer = '${data['answer'] ?? ''}'.trim();
+      if (serverHistory.isNotEmpty) {
+        aiConversation = serverHistory;
+      } else if (answer.isNotEmpty) {
+        aiConversation = [
+          ...aiConversation,
+          {
+            'id':
+                data['assistant_message_id'] ??
+                'server-${DateTime.now().microsecondsSinceEpoch}',
+            'role': 'assistant',
+            'content': answer,
+            'created_at': DateTime.now().toIso8601String(),
+          },
+        ];
+      }
+      aiSources = valueRows(data['sources']);
+      aiSuggestions = _stringRows(data['suggestions']);
+      aiFallbackMode = data['fallback_used'] == true;
+      aiServiceAvailable = true;
+    } on ApiException catch (error) {
+      if (_familyAssistantFallbackEligible(error)) {
+        aiServiceAvailable = false;
+        aiFallbackMode = false;
+        aiConversation = aiConversation
+            .where((item) => item['id'] != optimisticId)
+            .toList(growable: false);
+        aiReplyError =
+            'AI yordamchi hali markaz tomonidan ulanmagan. Hozircha bu funksiya ishlamaydi.';
+      } else {
+        aiReplyError = error.message;
+      }
+    } on Object {
+      aiReplyError = 'AI yordamchi hozir javob bera olmadi.';
+    } finally {
+      aiReplyBusy = false;
+      notifyListeners();
     }
   }
+
+  Map<String, Object?> _familyAssistantWelcome() => {
+    'id': 'family-welcome',
+    'role': 'assistant',
+    'content': isParent
+        ? 'Farzandingizning o‘qishi bo‘yicha savol bering. Men kabinetdagi davomat, baholar va vazifalarni bir joyda tushuntiraman.'
+        : 'Salom! Vazifalar, baholar, davomat yoki bugungi o‘qish rejangiz haqida savol bering.',
+    'created_at': DateTime.now().toIso8601String(),
+  };
+
+  List<String> _familyAssistantSuggestions() => isParent
+      ? const [
+          'Qaysi fan ko‘proq e’tibor talab qiladi?',
+          'Davomat holatini tushuntir',
+          'Yaqin vazifalarni ko‘rsat',
+        ]
+      : const [
+          'Bugun nimadan boshlay?',
+          'Baholarimni tahlil qil',
+          'Vazifalarim uchun reja tuz',
+        ];
 
   Future<void> loadMessages(int threadId, {bool force = false}) async {
     if (!force && messages.containsKey(threadId)) return;
@@ -813,19 +1195,25 @@ final class PortalController extends ChangeNotifier {
   }
 
   Future<void> _loadForms() async {
-    forms = (await _api.get(
+    forms = (await _getAllPages(
       '/api/v1/forms/',
       query: const {'page_size': 100, 'status': 'published'},
     )).rows;
   }
 
   Future<void> _loadAchievements() async {
-    achievementGrants = _selectedStudentRows(
-      (await _api.get(
+    final values = await Future.wait([
+      _getAllPages(
+        '/api/v1/achievements/',
+        query: const {'page_size': 100, 'status': 'active'},
+      ),
+      _getAllPages(
         '/api/v1/achievements/mine/',
         query: const {'page_size': 100},
-      )).rows,
-    );
+      ),
+    ]);
+    achievementCatalog = values[0].rows;
+    achievementGrants = _selectedStudentRows(values[1].rows);
   }
 
   Future<void> _loadDiscipline() async {
@@ -833,7 +1221,7 @@ final class PortalController extends ChangeNotifier {
     final values = await Future.wait([
       _api.get('/api/v1/rulebook/rules/mine/'),
       _api.get('/api/v1/rulebook/rules/pending/'),
-      _api.get(
+      _getAllPages(
         '/api/v1/rulebook/penalties/',
         query: {'page_size': 100, if (isParent) 'student': ?studentId},
       ),
@@ -856,11 +1244,20 @@ final class PortalController extends ChangeNotifier {
   }
 
   Future<void> _loadCards() async {
-    if (!isStudent || !can('card:read')) return;
+    if (!can('card:read')) return;
+    final studentId = selectedStudentId;
+    if (studentId == null) return;
     final values = await Future.wait([
-      _api.get('/api/v1/cards/', query: const {'page_size': 100}),
-      _api.get('/api/v1/cards/types/', query: const {'page_size': 100}),
-      _api.get('/api/v1/cards/wallets/me/'),
+      _getAllPages(
+        '/api/v1/cards/',
+        query: {'page_size': 100, if (isParent) 'student': studentId},
+      ),
+      _getAllPages('/api/v1/cards/types/', query: const {'page_size': 100}),
+      _api.get(
+        isParent
+            ? '/api/v1/cards/wallets/$studentId/'
+            : '/api/v1/cards/wallets/me/',
+      ),
     ]);
     cards = values[0].rows;
     cardTypes = values[1].rows;
@@ -872,10 +1269,204 @@ final class PortalController extends ChangeNotifier {
 
   Future<void> _loadAccount() async {
     await _loadProfile();
-    devices = (await _api.get(
+    devices = (await _getAllPages(
       '/api/v1/users/devices/',
       query: const {'page_size': 100},
     )).rows;
+  }
+
+  Future<Map<String, Object?>> loadAssignmentDetail(
+    int id, {
+    bool force = false,
+  }) => _loadDetail(
+    path: '/api/v1/assignments/$id/',
+    id: id,
+    target: assignmentDetails,
+    force: force,
+  );
+
+  Future<Map<String, Object?>> loadSubmissionDetail(
+    int id, {
+    bool force = false,
+  }) => _loadDetail(
+    path: '/api/v1/assignments/submissions/$id/',
+    id: id,
+    target: submissionDetails,
+    force: force,
+  );
+
+  Future<Map<String, Object?>> loadAttendanceRecordDetail(
+    int id, {
+    bool force = false,
+  }) => _loadDetail(
+    path: '/api/v1/attendance/records/$id/',
+    id: id,
+    target: attendanceRecordDetails,
+    force: force,
+  );
+
+  Future<Map<String, Object?>> loadScheduleLessonDetail(
+    int id, {
+    bool force = false,
+  }) => _loadDetail(
+    path: '/api/v1/schedule/lessons/$id/',
+    id: id,
+    target: scheduleLessonDetails,
+    force: force,
+  );
+
+  Future<Map<String, Object?>> loadExamDetail(int id, {bool force = false}) =>
+      _loadDetail(
+        path: '/api/v1/academics/exams/$id/',
+        id: id,
+        target: examDetails,
+        force: force,
+      );
+
+  Future<Map<String, Object?>> loadGradeDetail(int id, {bool force = false}) =>
+      _loadDetail(
+        path: '/api/v1/academics/grades/$id/',
+        id: id,
+        target: gradeDetails,
+        force: force,
+      );
+
+  Future<Map<String, Object?>> loadTranscriptDetail(
+    int id, {
+    bool force = false,
+  }) => _loadDetail(
+    path: '/api/v1/academics/transcripts/$id/',
+    id: id,
+    target: transcriptDetails,
+    force: force,
+  );
+
+  Future<Map<String, Object?>> loadPlacementAttemptDetail(
+    int id, {
+    bool force = false,
+  }) => _loadDetail(
+    path: '/api/v1/placement/attempts/$id/',
+    id: id,
+    target: placementAttemptDetails,
+    force: force,
+  );
+
+  Future<List<Map<String, Object?>>> loadPlacementSuggestions(
+    int attemptId, {
+    bool force = false,
+  }) async {
+    if (!can('placement:write')) {
+      throw const ApiException(
+        message: 'Guruh tavsiyalari faqat vakolatli xodimlar uchun.',
+        code: 'forbidden',
+        statusCode: 403,
+      );
+    }
+    final cached = placementSuggestions[attemptId];
+    if (!force && cached != null) return cached;
+    final rows = (await _api.get(
+      '/api/v1/placement/attempts/$attemptId/suggestions/',
+    )).rows;
+    placementSuggestions[attemptId] = rows;
+    lastSuccessfulSyncAt = DateTime.now();
+    connectionIssue = false;
+    notifyListeners();
+    return rows;
+  }
+
+  Future<Map<String, Object?>> submitPlacementAttempt(
+    int attemptId,
+    List<Map<String, Object?>> answers,
+  ) async {
+    if (!isStudent) {
+      throw const ApiException(
+        message: 'Daraja sinovini faqat o‘quvchi topshirishi mumkin.',
+        code: 'forbidden',
+        statusCode: 403,
+      );
+    }
+    final result = (await _api.post(
+      '/api/v1/placement/attempts/$attemptId/submit/',
+      body: {'answers': answers},
+    )).object;
+    placementAttemptDetails[attemptId] = result;
+    placementAttempts = [
+      for (final attempt in placementAttempts)
+        if (_integer(attempt['id']) == attemptId)
+          {...attempt, ...result}
+        else
+          attempt,
+    ];
+    lastSuccessfulSyncAt = DateTime.now();
+    connectionIssue = false;
+    notifyListeners();
+    await refresh(PortalSection.placement);
+    return placementAttemptDetails[attemptId] ?? result;
+  }
+
+  Future<Map<String, Object?>> loadAchievementDetail(
+    int id, {
+    bool force = false,
+  }) => _loadDetail(
+    path: '/api/v1/achievements/$id/',
+    id: id,
+    target: achievementDetails,
+    force: force,
+  );
+
+  Future<Map<String, Object?>> loadCardDetail(int id, {bool force = false}) =>
+      _loadDetail(
+        path: '/api/v1/cards/$id/',
+        id: id,
+        target: cardDetails,
+        force: force,
+      );
+
+  Future<Map<String, Object?>> loadContentDetail(
+    String resource,
+    int id, {
+    bool force = false,
+  }) {
+    const resources = {
+      'libraries',
+      'courses',
+      'modules',
+      'lessons',
+      'folders',
+      'files',
+      'materials',
+    };
+    if (!resources.contains(resource)) {
+      throw ArgumentError.value(resource, 'resource');
+    }
+    final target = contentDetails.putIfAbsent(resource, () => {});
+    final path = switch (resource) {
+      'libraries' => '/api/v1/content/libraries/$id/',
+      'courses' => '/api/v1/content/courses/$id/',
+      'modules' => '/api/v1/content/modules/$id/',
+      'lessons' => '/api/v1/content/lessons/$id/',
+      'folders' => '/api/v1/content/folders/$id/',
+      'files' => '/api/v1/content/files/$id/',
+      'materials' => '/api/v1/content/materials/$id/',
+      _ => throw StateError('Unreachable content resource.'),
+    };
+    return _loadDetail(path: path, id: id, target: target, force: force);
+  }
+
+  Future<Map<String, Object?>> _loadDetail({
+    required String path,
+    required int id,
+    required Map<int, Map<String, Object?>> target,
+    required bool force,
+  }) async {
+    final cached = target[id];
+    if (!force && cached != null) return cached;
+    final value = (await _api.get(path)).object;
+    target[id] = value;
+    lastSuccessfulSyncAt = DateTime.now();
+    connectionIssue = false;
+    notifyListeners();
+    return value;
   }
 
   Future<void> submitAssignment({
@@ -929,6 +1520,7 @@ final class PortalController extends ChangeNotifier {
         url,
         bytes,
         filename: filename,
+        contentType: contentType,
         fields: fields,
       );
     } else {
@@ -972,8 +1564,219 @@ final class PortalController extends ChangeNotifier {
       '/api/v1/messaging/threads/$threadId/messages/',
       body: {'body': body.trim(), 'attachments': attachments},
     );
+    // The POST is the transactional boundary. A later refresh failure must not
+    // make the composer retry a message whose one-time attachment grant was
+    // already consumed by the server.
+    try {
+      await loadMessages(threadId, force: true);
+      await refresh(PortalSection.messages);
+    } on ApiException {
+      // Polling will reconcile the successfully-created message shortly.
+    }
+  }
+
+  Future<void> editMessage({
+    required int threadId,
+    required int messageId,
+    required String body,
+  }) async {
+    final text = body.trim();
+    if (text.isEmpty) {
+      throw const ApiException(
+        message: 'Xabar matni bo‘sh bo‘lishi mumkin emas.',
+        code: 'validation_error',
+      );
+    }
+    await _api.patch(
+      '/api/v1/messaging/messages/$messageId/',
+      body: {'body': text},
+    );
     await loadMessages(threadId, force: true);
-    await refresh(PortalSection.messages);
+  }
+
+  Future<void> deleteMessage({
+    required int threadId,
+    required int messageId,
+  }) async {
+    await _api.delete('/api/v1/messaging/messages/$messageId/');
+    final cached = messages[threadId];
+    if (cached != null) {
+      messages[threadId] = [
+        for (final message in cached)
+          if (_integer(message['id']) != messageId) message,
+      ];
+      notifyListeners();
+    }
+    await loadMessages(threadId, force: true);
+  }
+
+  Future<void> setMessageReaction({
+    required int threadId,
+    required int messageId,
+    required String emoji,
+    required bool remove,
+  }) async {
+    final normalized = emoji.trim();
+    if (normalized.isEmpty) return;
+    if (remove) {
+      final encoded = Uri.encodeComponent(normalized);
+      await _api.delete(
+        '/api/v1/messaging/messages/$messageId/reactions/$encoded/',
+      );
+    } else {
+      await _api.post(
+        '/api/v1/messaging/messages/$messageId/reactions/',
+        body: {'emoji': normalized},
+      );
+    }
+    await loadMessages(threadId, force: true);
+  }
+
+  Map<String, Object?> messagingContactByUserId(int? userId) {
+    if (userId == null) return const {};
+    final contact = contacts
+        .where((item) => _integer(item['user_id'] ?? item['id']) == userId)
+        .firstOrNull;
+    final detail = messagingContactProfiles[userId];
+    if (contact == null) return detail ?? const {};
+    if (detail == null) return contact;
+    final merged = <String, Object?>{
+      ...contact,
+      ...detail,
+      'id': contact['id'],
+      'user_id': userId,
+    };
+    // Directory rows are refreshed more often than full profiles. Prefer their
+    // fresh signed avatar URL over a cached URL that may have expired.
+    for (final key in const ['avatar_url', 'photo_url', 'profile_photo_url']) {
+      final value = '${contact[key] ?? ''}'.trim();
+      if (value.isNotEmpty && value != 'null') merged[key] = contact[key];
+    }
+    return merged;
+  }
+
+  Future<Map<String, Object?>> loadMessagingContactProfile(
+    Map<String, Object?> contact, {
+    bool force = false,
+  }) async {
+    final userId = _integer(contact['user_id'] ?? contact['id']);
+    if (userId == null) return contact;
+    final directory = contacts
+        .where((item) => _integer(item['user_id'] ?? item['id']) == userId)
+        .firstOrNull;
+    final base = <String, Object?>{
+      ...contact,
+      ...?directory,
+      'user_id': userId,
+    };
+    final cached = messagingContactProfiles[userId];
+    if (!force && cached?['_profile_detail_loaded'] == true) {
+      return messagingContactByUserId(userId);
+    }
+    if (!force && cached?['_profile_detail_attempted'] == true) {
+      return messagingContactByUserId(userId);
+    }
+    if (!force && _loadingMessagingContactProfiles.contains(userId)) {
+      return messagingContactByUserId(userId);
+    }
+    final profileId = _integer(base['profile_id']);
+    final kind = _value(base, const ['principal_kind'], fallback: '');
+    final rolePath = switch ((kind, profileId)) {
+      ('student', final int id) => '/api/v1/students/$id/',
+      ('teacher', final int id) => '/api/v1/teachers/$id/',
+      ('staff', final int id) => '/api/v1/org/staff/$id/',
+      ('parent', final int id) => '/api/v1/parents/$id/',
+      _ => '',
+    };
+    // The live API exposes role detail and student leadership endpoints, but
+    // intentionally has no messaging contact-detail route.
+    // openapi-operation: GET /api/v1/students/{}/leadership-profile/
+    final paths = <String>[
+      if (rolePath.isNotEmpty) rolePath,
+      if (kind == 'student' && profileId != null)
+        '/api/v1/students/$profileId/leadership-profile/',
+    ];
+    _loadingMessagingContactProfiles.add(userId);
+    try {
+      var merged = <String, Object?>{...base};
+      var loaded = false;
+      for (final path in paths) {
+        try {
+          final detail = (await _api.get(path)).object;
+          merged = {...merged, ..._normalizedContactDetail(detail)};
+          loaded = true;
+        } on ApiException catch (error) {
+          // Family accounts may not read another role's private directory
+          // record. Keep the permitted contact/thread data in that case.
+          if (error.statusCode != 403 &&
+              error.statusCode != 404 &&
+              error.statusCode != 405) {
+            rethrow;
+          }
+        }
+      }
+      messagingContactProfiles[userId] = {
+        ...merged,
+        'id': base['id'],
+        'user_id': userId,
+        'profile_id': profileId,
+        '_profile_detail_attempted': true,
+        '_profile_detail_loaded': loaded,
+      };
+    } finally {
+      _loadingMessagingContactProfiles.remove(userId);
+    }
+    notifyListeners();
+    return messagingContactByUserId(userId);
+  }
+
+  Map<String, Object?> _normalizedContactDetail(Map<String, Object?> detail) {
+    final identity = detail['identity'] is Map
+        ? Map<String, Object?>.from(detail['identity'] as Map)
+        : const <String, Object?>{};
+    final branch = identity['branch'] is Map
+        ? Map<String, Object?>.from(identity['branch'] as Map)
+        : const <String, Object?>{};
+    final group = identity['current_group'] is Map
+        ? Map<String, Object?>.from(identity['current_group'] as Map)
+        : const <String, Object?>{};
+    final department = group['department'] is Map
+        ? Map<String, Object?>.from(group['department'] as Map)
+        : const <String, Object?>{};
+    final photo = identity['photo'] is Map
+        ? Map<String, Object?>.from(identity['photo'] as Map)
+        : const <String, Object?>{};
+    final learning = detail['learning'] is Map
+        ? Map<String, Object?>.from(detail['learning'] as Map)
+        : const <String, Object?>{};
+    final metadata = detail['record_metadata'] is Map
+        ? Map<String, Object?>.from(detail['record_metadata'] as Map)
+        : const <String, Object?>{};
+    final memberships = detail['role_memberships'] is List
+        ? detail['role_memberships'] as List
+        : detail['account_type_assignments'] is List
+        ? detail['account_type_assignments'] as List
+        : const [];
+    final membership = memberships.whereType<Map>().firstOrNull;
+    return <String, Object?>{
+      ...detail,
+      ...identity,
+      if (identity['public_student_id'] != null)
+        'student_id': identity['public_student_id'],
+      if (branch['name'] != null) 'branch_name': branch['name'],
+      if (group['name'] != null) 'current_cohort_name': group['name'],
+      if ('${identity['academic_level'] ?? ''}'.trim().isEmpty &&
+          group['level'] != null)
+        'academic_level': group['level'],
+      if (department['name'] != null) 'department_name': department['name'],
+      if (photo['download_url'] != null) 'avatar_url': photo['download_url'],
+      if (learning['subjects'] != null) 'subjects': learning['subjects'],
+      if (metadata['created_at'] != null) 'created_at': metadata['created_at'],
+      if (membership?['branch_name'] != null)
+        'branch_name': membership?['branch_name'],
+      if (membership?['department_name'] != null)
+        'department_name': membership?['department_name'],
+    };
   }
 
   Future<String> uploadMessageFile({
@@ -998,18 +1801,29 @@ final class PortalController extends ChangeNotifier {
               '${entry.key}': '${entry.value}',
           }
         : const <String, String>{};
-    if (url.isEmpty || key.isEmpty || fields.isEmpty) {
+    final method = valueText(grant, const [
+      'method',
+    ], fallback: fields.isEmpty ? 'PUT' : 'POST').toUpperCase();
+    if (url.isEmpty ||
+        key.isEmpty ||
+        (method == 'POST' && fields.isEmpty) ||
+        (method != 'POST' && method != 'PUT')) {
       throw const ApiException(
         message: 'Fayl yuklash ruxsati noto‘g‘ri qaytdi.',
         code: 'invalid_upload_grant',
       );
     }
-    await _api.uploadMultipartBytes(
-      url,
-      bytes,
-      filename: filename,
-      fields: fields,
-    );
+    if (method == 'POST') {
+      await _api.uploadMultipartBytes(
+        url,
+        bytes,
+        filename: filename,
+        contentType: contentType,
+        fields: fields,
+      );
+    } else {
+      await _api.uploadBytes(url, bytes, contentType: contentType);
+    }
     return key;
   }
 
@@ -1023,6 +1837,38 @@ final class PortalController extends ChangeNotifier {
       throw const ApiException(message: 'Yuklab olish havolasi topilmadi.');
     }
     return url;
+  }
+
+  Future<void> forwardMessage({
+    required int sourceThreadId,
+    required int targetThreadId,
+    required Map<String, Object?> message,
+  }) async {
+    final forwardedAttachments = <String>[];
+    final rawAttachments = message['attachments'];
+    if (rawAttachments is List) {
+      for (final raw in rawAttachments.take(10)) {
+        final key = _messageStorageKey(raw);
+        if (key.isEmpty) continue;
+        final url = await messageAttachmentDownloadUrl(sourceThreadId, key);
+        final bytes = await _api.downloadBytes(url);
+        final filename = _messageStorageFilename(key);
+        forwardedAttachments.add(
+          await uploadMessageFile(
+            filename: filename,
+            contentType: _messageForwardContentType(filename),
+            bytes: bytes,
+          ),
+        );
+      }
+    }
+    final body = valueText(message, const ['body'], fallback: '');
+    final forwardedBody = body.isEmpty ? '' : '↪ Forwarded message\n$body';
+    await sendMessage(
+      targetThreadId,
+      forwardedBody,
+      attachments: forwardedAttachments,
+    );
   }
 
   Future<int> createThread({
@@ -1060,9 +1906,16 @@ final class PortalController extends ChangeNotifier {
     await refresh(PortalSection.notifications);
   }
 
-  Future<void> markAllNotificationsRead() async {
+  Future<void> markAllNotificationsRead({bool refreshAfter = true}) async {
     await _api.post('/api/v1/notifications/read-all/', body: const {});
-    await refresh(PortalSection.notifications);
+    final readAt = DateTime.now().toUtc().toIso8601String();
+    notifications = [
+      for (final row in notifications)
+        if (row['read_at'] == null) {...row, 'read_at': readAt} else row,
+    ];
+    unreadNotificationCount = 0;
+    notifyDataChanged();
+    if (refreshAfter) await refresh(PortalSection.notifications);
   }
 
   Future<void> saveNotificationPreferences(
@@ -1098,6 +1951,11 @@ final class PortalController extends ChangeNotifier {
     Map<String, Object?> changes,
   ) async {
     profile = (await _api.patch('/api/v1/users/me/', body: changes)).object;
+    if (isStudent) {
+      studentProfile = {...studentProfile, ...profile};
+    } else if (isParent) {
+      parentProfile = {...parentProfile, ...profile};
+    }
     notifyListeners();
     return profile;
   }
@@ -1221,6 +2079,7 @@ final class PortalController extends ChangeNotifier {
     _loaded.clear();
     _loading.clear();
     _errors.clear();
+    _optionalApiFailures.clear();
     dashboard = report = const {};
     studentProfile = studentStats = studentComparison = parentProfile =
         const {};
@@ -1230,15 +2089,38 @@ final class PortalController extends ChangeNotifier {
     calendarUrl = '';
     attendanceSummary = const {};
     subjects = examTypes = exams = grades = transcripts = const [];
+    placementAttempts = placementTests = const [];
     libraries = courses = modules = contentLessons = folders = files =
         materials = const [];
     notifications = notificationPreferences = contacts = threads = forms =
         const [];
-    achievementGrants = rules = pendingRules = penalties = cards = cardTypes =
-        cardScans = devices = const [];
+    messagingContactProfiles.clear();
+    _loadingMessagingContactProfiles.clear();
+    aiRequests = const [];
+    aiBudget = aiUsage = const {};
+    aiConversation = aiSources = const [];
+    aiSuggestions = const [];
+    aiReplyBusy = false;
+    aiReplyError = null;
+    aiFallbackMode = false;
+    aiServiceAvailable = false;
+    achievementCatalog = achievementGrants = rules = pendingRules = penalties =
+        cards = cardTypes = cardScans = devices = const [];
     messages.clear();
     loadingMessageThreads.clear();
     messageErrors.clear();
+    assignmentDetails.clear();
+    submissionDetails.clear();
+    attendanceRecordDetails.clear();
+    scheduleLessonDetails.clear();
+    examDetails.clear();
+    gradeDetails.clear();
+    transcriptDetails.clear();
+    placementAttemptDetails.clear();
+    placementSuggestions.clear();
+    achievementDetails.clear();
+    cardDetails.clear();
+    contentDetails.clear();
     wallet = outstanding = const {};
     unreadNotificationCount = 0;
     selectedStudentId = null;
@@ -1252,9 +2134,51 @@ final class PortalController extends ChangeNotifier {
   @override
   void dispose() {
     PushNotificationService.instance.unbindAuthenticatedSession();
+    _preferences.removeListener(_syncPreferences);
     _api.close();
     super.dispose();
   }
+
+  void _syncPreferences() {
+    _api.acceptLanguage = _preferences.language.code;
+    notifyListeners();
+  }
+}
+
+bool _familyAssistantFallbackEligible(ApiException? error) {
+  if (error == null) return false;
+  return const {404, 405, 502, 503, 504}.contains(error.statusCode) ||
+      error.code == 'service_unavailable';
+}
+
+Set<String> _permissionValues(Object? raw, {required bool revoked}) {
+  if (raw is Map) {
+    final keys = revoked
+        ? const ['revoked', 'revoked_permissions', 'revoked_permission_codes']
+        : const ['permissions', 'granted', 'permission_codes', 'effective'];
+    return {
+      for (final key in keys) ..._permissionValues(raw[key], revoked: false),
+    };
+  }
+  if (raw is String) {
+    final value = raw.trim();
+    return value.isEmpty || value == 'null' ? const {} : {value};
+  }
+  if (raw is! Iterable) return const {};
+  return {
+    for (final value in raw)
+      if ('$value'.trim().isNotEmpty && '$value'.trim() != 'null')
+        '$value'.trim(),
+  };
+}
+
+bool _permissionSetAllows(Set<String> codes, String permission) {
+  if (codes.contains('*:*') || codes.contains(permission)) return true;
+  final separator = permission.indexOf(':');
+  final resource = separator < 0
+      ? permission
+      : permission.substring(0, separator);
+  return codes.contains('$resource:*');
 }
 
 Map<int, Map<String, Object?>> latestAssignmentSubmissions(
@@ -1332,6 +2256,13 @@ List<Map<String, Object?>> valueRows(Object? value) {
 Map<String, Object?> valueMap(Object? value) =>
     value is Map ? Map<String, Object?>.from(value) : const <String, Object?>{};
 
+List<String> _stringRows(Object? value) => value is Iterable
+    ? [
+        for (final item in value)
+          if ('$item'.trim().isNotEmpty) '$item'.trim(),
+      ]
+    : const [];
+
 String _value(
   Map<String, Object?> map,
   List<String> keys, {
@@ -1361,4 +2292,59 @@ String _sessionAccess(Object? value) {
     }
   }
   return '';
+}
+
+String _messageStorageKey(Object? value) {
+  if (value is Map) {
+    for (final field in const [
+      'key',
+      'attachment_key',
+      'file_key',
+      'storage_key',
+      'path',
+    ]) {
+      final text = '${value[field] ?? ''}'.trim();
+      if (text.isNotEmpty && text != 'null') return text;
+    }
+    return '';
+  }
+  final text = '${value ?? ''}'.trim();
+  return text == 'null' ? '' : text;
+}
+
+String _messageStorageFilename(String key) {
+  final name = Uri.decodeComponent(key.split('?').first.split('/').last);
+  final normalized = name.replaceFirst(
+    RegExp(r'^[0-9a-f]{8,}-', caseSensitive: false),
+    '',
+  );
+  return normalized.isEmpty ? 'forwarded-file' : normalized;
+}
+
+String _messageForwardContentType(String filename) {
+  final extension = filename.toLowerCase().split('.').last;
+  return switch (extension) {
+    'pdf' => 'application/pdf',
+    'mp3' => 'audio/mpeg',
+    'm4a' || 'aac' => 'audio/mp4',
+    'ogg' => 'audio/ogg',
+    'opus' => 'audio/opus',
+    'wav' => 'audio/wav',
+    'webm' =>
+      filename.toLowerCase().contains('voice-') ? 'audio/webm' : 'video/webm',
+    'png' => 'image/png',
+    'jpg' || 'jpeg' => 'image/jpeg',
+    'gif' => 'image/gif',
+    'webp' => 'image/webp',
+    'heic' => 'image/heic',
+    'heif' => 'image/heif',
+    'mp4' || 'm4v' => 'video/mp4',
+    'mov' => 'video/quicktime',
+    '3gp' => 'video/3gpp',
+    'doc' => 'application/msword',
+    'docx' =>
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'txt' => 'text/plain',
+    _ => 'application/octet-stream',
+  };
 }

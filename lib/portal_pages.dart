@@ -13,7 +13,6 @@ class _RebuiltHomePortalPage extends StatelessWidget {
 
   Widget _buildStudent(BuildContext context, PortalController portal) {
     final attendance = valueMap(portal.report['attendance']);
-    final payment = valueMap(portal.report['payment']);
     final rank = valueMap(portal.report['rank']);
     final lessons = valueRows(portal.dashboard['next_lessons']);
     final homework = valueRows(portal.dashboard['open_homework']);
@@ -52,52 +51,16 @@ class _RebuiltHomePortalPage extends StatelessWidget {
               : '${valueText(homework.first, const ['title'])} · ${_dateLabel(homework.first['due_at'], time: true)}',
         ),
         const SizedBox(height: 16),
-        _CockpitMetricStrip(
-          items: [
-            _CockpitMetricData(
-              label: 'Ochiq vazifa',
-              value: '$openCount',
-              note: homework.isEmpty
-                  ? 'Hammasi bajarilgan'
-                  : 'Muddatni kuzating',
-              icon: Icons.task_alt_rounded,
-              color: Sf.primary,
-            ),
-            _CockpitMetricData(
-              label: 'Davomat',
-              value: attendance['rate'] == null
-                  ? '—'
-                  : '${(rate * 100).round()}%',
-              note:
-                  '${attendance['present'] ?? 0} / ${attendance['of'] ?? 0} dars',
-              icon: Icons.how_to_reg_rounded,
-              color: Sf.success,
-            ),
-            _CockpitMetricData(
-              label: 'O‘rtacha natija',
-              value: grades.isEmpty ? '—' : '${average.round()}%',
-              note: rank.isEmpty
-                  ? '${grades.length} ta so‘nggi baho'
-                  : 'Sinfda ${rank['rank']} / ${rank['of']}',
-              icon: Icons.insights_rounded,
-              color: Sf.accent,
-            ),
-            _CockpitMetricData(
-              label: 'Oilaviy balans',
-              value: _money(
-                payment['outstanding_uzs'] ??
-                    portal.dashboard['outstanding_uzs'],
-              ),
-              note: 'Joriy qarzdorlik',
-              icon: Icons.account_balance_wallet_outlined,
-              color: Theme.of(context).colorScheme.error,
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
         _HomeActionRail(
           title: 'Tezkor o‘tish',
           items: [
+            const _HomeActionData(
+              label: 'Mening profilim',
+              detail: 'Shaxsiy va o‘quv ma’lumotlari',
+              icon: Icons.badge_outlined,
+              color: Sf.accent,
+              section: PortalSection.identity,
+            ),
             if (portal.can('assignments:read'))
               _HomeActionData(
                 label: 'Vazifalar',
@@ -129,9 +92,11 @@ class _RebuiltHomePortalPage extends StatelessWidget {
                 section: PortalSection.academics,
               ),
             if (portal.can('messaging:read'))
-              const _HomeActionData(
+              _HomeActionData(
                 label: 'Ustoz bilan chat',
-                detail: 'Savol yoki fayl yuboring',
+                detail: portal.threads.isEmpty
+                    ? 'Savol yoki fayl yuboring'
+                    : '${portal.threads.length} ta suhbat',
                 icon: Icons.forum_outlined,
                 color: Sf.success,
                 section: PortalSection.messages,
@@ -139,26 +104,53 @@ class _RebuiltHomePortalPage extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 16),
+        _CockpitMetricStrip(
+          items: [
+            _CockpitMetricData(
+              label: 'Ochiq vazifa',
+              value: '$openCount',
+              note: homework.isEmpty
+                  ? 'Hammasi bajarilgan'
+                  : 'Muddatni kuzating',
+              icon: Icons.task_alt_rounded,
+              color: Sf.primary,
+            ),
+            _CockpitMetricData(
+              label: 'Davomat',
+              value: attendance['rate'] == null
+                  ? '—'
+                  : '${(rate * 100).round()}%',
+              note:
+                  '${attendance['present'] ?? 0} / ${attendance['of'] ?? 0} dars',
+              icon: Icons.how_to_reg_rounded,
+              color: Sf.success,
+            ),
+            _CockpitMetricData(
+              label: 'O‘rtacha natija',
+              value: grades.isEmpty ? '—' : '${average.round()}%',
+              note: rank.isEmpty
+                  ? '${grades.length} ta so‘nggi baho'
+                  : 'Sinfda ${rank['rank']} / ${rank['of']}',
+              icon: Icons.insights_rounded,
+              color: Sf.accent,
+            ),
+            _CockpitMetricData(
+              label: 'Keyingi dars',
+              value: lessons.isEmpty
+                  ? '—'
+                  : _timeOnly(lessons.first['starts_at']),
+              note: lessons.isEmpty
+                  ? 'Yaqin dars belgilanmagan'
+                  : valueText(lessons.first, const ['title']),
+              icon: Icons.schedule_rounded,
+              color: Sf.warn,
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
         _CockpitColumns(
           primary: _TodayStack(lessons: lessons, homework: homework),
-          secondary: _PerformancePanel(
-            title: 'O‘qish pulsi',
-            rate: rate,
-            ringLabel: 'Davomat',
-            ringDetail:
-                '${attendance['present'] ?? 0} / ${attendance['of'] ?? 0} darsda qatnashgan.',
-            items: [
-              for (final grade in grades.take(4))
-                _PortalBarDatum(
-                  label: valueText(grade, const ['exam'], fallback: 'Natija'),
-                  value: _gradePercentage(grade),
-                  detail:
-                      '${grade['score'] ?? '—'} / ${grade['max_score'] ?? '—'} · ${_dateLabel(grade['exam_date'])}',
-                  color: Theme.of(context).colorScheme.primary,
-                  icon: Icons.school_outlined,
-                ),
-            ],
-          ),
+          secondary: _RecentResultsPanel(grades: grades, rank: rank),
         ),
       ],
     );
@@ -169,11 +161,16 @@ class _RebuiltHomePortalPage extends StatelessWidget {
     final payment = valueMap(portal.report['payment']);
     final rank = valueMap(portal.report['rank']);
     final sheet = valueRows(attendance['sheet']);
+    final invoices = valueRows(portal.outstanding['invoices']);
+    final nextInvoice = invoices.firstOrNull;
     final selected = portal.children
         .where((item) => valueInt(item['id']) == portal.selectedStudentId)
         .firstOrNull;
     final outstanding =
-        double.tryParse('${payment['outstanding_uzs'] ?? 0}') ?? 0;
+        double.tryParse(
+          '${portal.outstanding['outstanding_uzs'] ?? payment['outstanding_uzs'] ?? 0}',
+        ) ??
+        0;
     final needsPaymentAttention = outstanding > 0;
     final rate = (double.tryParse('${attendance['rate']}') ?? 0)
         .clamp(0.0, 1.0)
@@ -224,50 +221,12 @@ class _RebuiltHomePortalPage extends StatelessWidget {
                 ? 'Jiddiy ogohlantirish yo‘q'
                 : 'Holat baholanmoqda',
             attentionBody: needsPaymentAttention
-                ? '${_money(payment['outstanding_uzs'])} ochiq qarzdorlik mavjud.'
+                ? '${_money(context, outstanding)} ochiq qarzdorlik mavjud.'
                 : needsAttendanceAttention
                 ? 'Joriy davomat ${(rate * 100).round()}% — tafsilotlarni tekshiring.'
                 : evidenceComplete
                 ? 'Davomat va to‘lov ko‘rsatkichlari me’yorda.'
                 : 'Xulosa uchun davomat va to‘lov ma’lumotlari yetarli emas.',
-          ),
-          const SizedBox(height: 16),
-          _CockpitMetricStrip(
-            items: [
-              _CockpitMetricData(
-                label: 'Davomat',
-                value: attendance['rate'] == null
-                    ? '—'
-                    : '${(rate * 100).round()}%',
-                note: 'Kechikish bilan birga',
-                icon: Icons.fact_check_outlined,
-                color: Sf.success,
-              ),
-              _CockpitMetricData(
-                label: 'Qatnashgan',
-                value:
-                    '${attendance['present'] ?? 0} / ${attendance['of'] ?? 0}',
-                note: 'Davomat jurnalida',
-                icon: Icons.how_to_reg_outlined,
-                color: Sf.primary,
-              ),
-              _CockpitMetricData(
-                label: 'Sinfdagi o‘rni',
-                value: rank.isEmpty ? '—' : '${rank['rank']} / ${rank['of']}',
-                note: rank.isEmpty
-                    ? 'Markaz yashirgan'
-                    : 'O‘rtacha ${rank['average_pct'] ?? '—'}%',
-                icon: Icons.leaderboard_outlined,
-                color: Sf.accent,
-              ),
-              _CockpitMetricData(
-                label: 'Ochiq to‘lov',
-                value: _money(payment['outstanding_uzs']),
-                note: 'Oilaviy balans',
-                icon: Icons.payments_outlined,
-                color: Theme.of(context).colorScheme.error,
-              ),
-            ],
           ),
           const SizedBox(height: 16),
           _HomeActionRail(
@@ -280,14 +239,6 @@ class _RebuiltHomePortalPage extends StatelessWidget {
                 color: Sf.primary,
                 section: PortalSection.identity,
               ),
-              if (portal.can('assignments:read'))
-                const _HomeActionData(
-                  label: 'Farzand vazifalari',
-                  detail: 'Muddat va topshirish holati',
-                  icon: Icons.assignment_outlined,
-                  color: Sf.warn,
-                  section: PortalSection.assignments,
-                ),
               if (portal.can('attendance:read'))
                 _HomeActionData(
                   label: 'Davomat tafsiloti',
@@ -304,6 +255,14 @@ class _RebuiltHomePortalPage extends StatelessWidget {
                   color: Sf.accent,
                   section: PortalSection.academics,
                 ),
+              if (portal.can('schedule:read'))
+                const _HomeActionData(
+                  label: 'Oila taqvimi',
+                  detail: 'Dars va tadbirlar',
+                  icon: Icons.calendar_month_outlined,
+                  color: Sf.warn,
+                  section: PortalSection.schedule,
+                ),
               if (portal.can('finance:read_own'))
                 _HomeActionData(
                   label: 'To‘lovlar',
@@ -315,28 +274,78 @@ class _RebuiltHomePortalPage extends StatelessWidget {
                       ? Theme.of(context).colorScheme.error
                       : Sf.success,
                   section: PortalSection.finance,
-                )
-              else if (portal.can('messaging:read'))
-                const _HomeActionData(
+                ),
+              if (portal.can('messaging:read'))
+                _HomeActionData(
                   label: 'Maktab bilan chat',
-                  detail: 'Savol yoki fayl yuboring',
+                  detail: portal.threads.isEmpty
+                      ? 'Savol yoki fayl yuboring'
+                      : '${portal.threads.length} ta suhbat',
                   icon: Icons.forum_outlined,
                   color: Sf.success,
                   section: PortalSection.messages,
                 ),
+              const _HomeActionData(
+                label: 'Mening profilim',
+                detail: 'Sozlamalar va xavfsizlik',
+                icon: Icons.manage_accounts_outlined,
+                color: Sf.accent,
+                section: PortalSection.account,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _CockpitMetricStrip(
+            items: [
+              _CockpitMetricData(
+                label: 'Davomat',
+                value: attendance['rate'] == null
+                    ? '—'
+                    : '${(rate * 100).round()}%',
+                note: 'Kechikish bilan birga',
+                icon: Icons.fact_check_outlined,
+                color: Sf.success,
+              ),
+              _CockpitMetricData(
+                label: 'Keyingi to‘lov',
+                value: nextInvoice == null
+                    ? '—'
+                    : _dateLabel(nextInvoice['due_date']),
+                note: nextInvoice == null
+                    ? 'Ochiq hisob-faktura yo‘q'
+                    : valueText(nextInvoice, const [
+                        'number',
+                      ], fallback: 'Hisob-faktura'),
+                icon: Icons.event_available_outlined,
+                color: Sf.warn,
+              ),
+              _CockpitMetricData(
+                label: 'Sinfdagi o‘rni',
+                value: rank.isEmpty ? '—' : '${rank['rank']} / ${rank['of']}',
+                note: rank.isEmpty
+                    ? 'Markaz yashirgan'
+                    : 'O‘rtacha ${rank['average_pct'] ?? '—'}%',
+                icon: Icons.leaderboard_outlined,
+                color: Sf.accent,
+              ),
+              _CockpitMetricData(
+                label: 'Ochiq to‘lov',
+                value: _money(context, outstanding),
+                note: invoices.isEmpty
+                    ? 'To‘lanadigan summa yo‘q'
+                    : '${invoices.length} ta ochiq hisob',
+                icon: Icons.payments_outlined,
+                color: Theme.of(context).colorScheme.error,
+              ),
             ],
           ),
           const SizedBox(height: 16),
           _CockpitColumns(
-            primary: _FamilyActivityPanel(rows: sheet),
-            secondary: _PerformancePanel(
-              title: 'Davomat taqsimoti',
-              rate: rate,
-              ringLabel: 'Qatnashuv',
-              ringDetail:
-                  '${attendance['present'] ?? 0} / ${attendance['of'] ?? 0} darsda qatnashgan.',
-              items: _attendanceBars(sheet, Theme.of(context).colorScheme),
+            primary: _ParentPaymentPanel(
+              invoices: invoices,
+              outstanding: outstanding,
             ),
+            secondary: _FamilyActivityPanel(rows: sheet),
           ),
         ],
       ],
@@ -463,6 +472,7 @@ class _CockpitHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final mobile = MediaQuery.sizeOf(context).width < 600;
     final accent = scheme.primary;
     final focusAccent = parent && !attentionKnown
         ? Sf.warn
@@ -473,7 +483,7 @@ class _CockpitHero extends StatelessWidget {
       'title',
     ], fallback: 'Bugun boshqa dars yo‘q');
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(mobile ? 15 : 20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -484,7 +494,7 @@ class _CockpitHero extends StatelessWidget {
             Color.alphaBlend(scheme.secondary.withValues(alpha: 0.16), Sf.ink),
           ],
         ),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(mobile ? 18 : 22),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -506,7 +516,11 @@ class _CockpitHero extends StatelessWidget {
               Text(
                 parent ? name : 'Salom, $name',
                 style: Sf.serif(
-                  size: compact ? 28 : 31,
+                  size: mobile
+                      ? 23
+                      : compact
+                      ? 28
+                      : 31,
                   color: Sf.surface,
                   height: 1.03,
                 ),
@@ -523,7 +537,7 @@ class _CockpitHero extends StatelessWidget {
             ],
           );
           final focus = Container(
-            padding: const EdgeInsets.all(17),
+            padding: EdgeInsets.all(mobile ? 12 : 17),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(14),
@@ -559,7 +573,7 @@ class _CockpitHero extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: focusAccent,
-                          fontSize: 9.5,
+                          fontSize: 10.5,
                           letterSpacing: 1.25,
                           fontWeight: FontWeight.w900,
                         ),
@@ -567,7 +581,7 @@ class _CockpitHero extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: mobile ? 8 : 12),
                 Text(
                   parent ? attentionTitle : lessonTitle,
                   maxLines: 2,
@@ -599,7 +613,11 @@ class _CockpitHero extends StatelessWidget {
           if (compact) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [intro, const SizedBox(height: 20), focus],
+              children: [
+                intro,
+                SizedBox(height: mobile ? 12 : 20),
+                focus,
+              ],
             );
           }
           return Row(
@@ -658,6 +676,23 @@ class _CockpitMetricStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
+      if (constraints.maxWidth < 600) {
+        final textScale = MediaQuery.textScalerOf(
+          context,
+        ).scale(1).clamp(1.0, 2.0);
+        return SizedBox(
+          height: 112 + (textScale - 1) * 58,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: items.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (context, index) => SizedBox(
+              width: 136 + (textScale - 1) * 22,
+              child: _CockpitMetricCard(item: items[index], dense: true),
+            ),
+          ),
+        );
+      }
       final count = constraints.maxWidth >= 1000 ? 4 : 2;
       const gap = 10.0;
       final width = (constraints.maxWidth - gap * (count - 1)) / count;
@@ -677,58 +712,71 @@ class _CockpitMetricStrip extends StatelessWidget {
 }
 
 class _CockpitMetricCard extends StatelessWidget {
-  const _CockpitMetricCard({required this.item});
+  const _CockpitMetricCard({required this.item, this.dense = false});
 
   final _CockpitMetricData item;
+  final bool dense;
 
   @override
-  Widget build(BuildContext context) => _SectionCard(
-    padding: const EdgeInsets.all(13),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: item.color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final accent = colors.brightness == Brightness.dark
+        ? Color.lerp(item.color, colors.onSurface, .46)!
+        : item.color;
+    return _SectionCard(
+      padding: EdgeInsets.all(dense ? 10 : 13),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: dense ? 28 : 32,
+                height: dense ? 28 : 32,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(item.icon, color: accent, size: dense ? 15 : 17),
               ),
-              child: Icon(item.icon, color: item.color, size: 17),
-            ),
-            const Spacer(),
-            Icon(Icons.north_east_rounded, size: 15, color: item.color),
-          ],
-        ),
-        const SizedBox(height: 11),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            item.value,
-            style: Sf.monoStyle(size: 20, weight: FontWeight.w700),
+              const Spacer(),
+              Icon(Icons.north_east_rounded, size: 15, color: accent),
+            ],
           ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          item.label.toUpperCase(),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Sf.eyebrow(),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          item.note,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-      ],
-    ),
-  );
+          SizedBox(height: dense ? 6 : 11),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              item.value,
+              style: Sf.monoStyle(
+                size: dense ? 17 : 20,
+                weight: FontWeight.w700,
+                color: colors.onSurface,
+              ),
+            ),
+          ),
+          SizedBox(height: dense ? 3 : 6),
+          Text(
+            item.label.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Sf.eyebrow(
+              color: colors.onSurfaceVariant,
+            ).copyWith(fontSize: dense ? 8 : null),
+          ),
+          SizedBox(height: dense ? 2 : 4),
+          Text(
+            item.note,
+            maxLines: dense ? 1 : 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _HomeActionData {
@@ -756,6 +804,51 @@ class _HomeActionRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) return const SizedBox.shrink();
+    if (MediaQuery.sizeOf(context).width < 600) {
+      final textScale = MediaQuery.textScalerOf(
+        context,
+      ).scale(1).clamp(1.0, 2.0);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.bolt_rounded,
+                size: 17,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+              ),
+              Text(
+                '${items.length} bo‘lim',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 104 + (textScale - 1) * 30,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: items.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) => SizedBox(
+                width: 146 + (textScale - 1) * 22,
+                child: _HomeActionTile(item: items[index], dense: true),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     return _SectionCard(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       child: Column(
@@ -795,7 +888,7 @@ class _HomeActionRail extends StatelessWidget {
                   ? items.length.clamp(1, 4).toInt()
                   : constraints.maxWidth >= 520
                   ? 2
-                  : 1;
+                  : 2;
               const gap = 10.0;
               final width = (constraints.maxWidth - gap * (count - 1)) / count;
               return Wrap(
@@ -818,55 +911,99 @@ class _HomeActionRail extends StatelessWidget {
 }
 
 class _HomeActionTile extends StatelessWidget {
-  const _HomeActionTile({required this.item});
+  const _HomeActionTile({required this.item, this.dense = false});
 
   final _HomeActionData item;
+  final bool dense;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: item.color.withValues(alpha: 0.075),
-    borderRadius: BorderRadius.circular(13),
-    child: InkWell(
-      borderRadius: BorderRadius.circular(13),
-      onTap: () => _PortalNavigationScope.go(context, item.section),
-      child: Padding(
-        padding: const EdgeInsets.all(13),
-        child: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: item.color.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(11),
-              ),
-              child: Icon(item.icon, color: item.color, size: 20),
-            ),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelLarge,
-                  ),
-                  Text(
-                    item.detail,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.arrow_outward_rounded, size: 17, color: item.color),
-          ],
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final colors = Theme.of(context).colorScheme;
+      final accent = colors.brightness == Brightness.dark
+          ? Color.lerp(item.color, colors.onSurface, .46)!
+          : item.color;
+      final compact = dense || constraints.maxWidth < 205;
+      final icon = Container(
+        width: dense ? 30 : 38,
+        height: dense ? 30 : 38,
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.16),
+          borderRadius: BorderRadius.circular(11),
         ),
-      ),
-    ),
+        child: Icon(item.icon, color: accent, size: dense ? 17 : 20),
+      );
+      final copy = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            item.label,
+            maxLines: dense
+                ? 1
+                : compact
+                ? 2
+                : 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            item.detail,
+            maxLines: dense
+                ? 1
+                : compact
+                ? 2
+                : 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      );
+      return Material(
+        color: accent.withValues(
+          alpha: colors.brightness == Brightness.dark ? 0.13 : 0.075,
+        ),
+        borderRadius: BorderRadius.circular(13),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(13),
+          onTap: () => _PortalNavigationScope.go(context, item.section),
+          child: Padding(
+            padding: EdgeInsets.all(dense ? 10 : 13),
+            child: compact
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          icon,
+                          const Spacer(),
+                          Icon(
+                            Icons.arrow_outward_rounded,
+                            size: 17,
+                            color: accent,
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: dense ? 7 : 11),
+                      copy,
+                    ],
+                  )
+                : Row(
+                    children: [
+                      icon,
+                      const SizedBox(width: 11),
+                      Expanded(child: copy),
+                      Icon(
+                        Icons.arrow_outward_rounded,
+                        size: 17,
+                        color: accent,
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      );
+    },
   );
 }
 
@@ -980,6 +1117,147 @@ class _FamilyActivityPanel extends StatelessWidget {
   );
 }
 
+class _RecentResultsPanel extends StatelessWidget {
+  const _RecentResultsPanel({required this.grades, required this.rank});
+
+  final List<Map<String, Object?>> grades;
+  final Map<String, Object?> rank;
+
+  @override
+  Widget build(BuildContext context) => _SectionCard(
+    padding: const EdgeInsets.all(18),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _DensePanelHeader(
+          title: 'So‘nggi natijalar',
+          meta: rank.isEmpty
+              ? '${grades.length} ta baho'
+              : 'Sinfda ${rank['rank'] ?? '—'} / ${rank['of'] ?? '—'}',
+          icon: Icons.school_outlined,
+        ),
+        const SizedBox(height: 12),
+        if (grades.isEmpty)
+          const _CompactEmpty(
+            message:
+                'Hali baho kiritilmagan. Yangi natijalar shu yerda aniq ko‘rinadi.',
+          )
+        else
+          for (final grade in grades.take(5))
+            _TimelineRow(
+              time: '${_gradePercentage(grade).round()}%',
+              title: valueText(grade, const ['exam'], fallback: 'Natija'),
+              subtitle:
+                  '${grade['score'] ?? '—'} / ${grade['max_score'] ?? '—'} · ${_dateLabel(grade['exam_date'])}',
+              color: _gradePercentage(grade) >= .7 ? Sf.success : Sf.warn,
+            ),
+        if (grades.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () =>
+                  _PortalNavigationScope.go(context, PortalSection.academics),
+              icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+              label: const Text('Barcha natijalar'),
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+class _ParentPaymentPanel extends StatelessWidget {
+  const _ParentPaymentPanel({
+    required this.invoices,
+    required this.outstanding,
+  });
+
+  final List<Map<String, Object?>> invoices;
+  final double outstanding;
+
+  @override
+  Widget build(BuildContext context) => _SectionCard(
+    padding: const EdgeInsets.all(18),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _DensePanelHeader(
+          title: 'To‘lov rejasi',
+          meta: outstanding <= 0
+              ? 'Balans yopilgan'
+              : 'Jami ${_money(context, outstanding)}',
+          icon: Icons.receipt_long_outlined,
+        ),
+        const SizedBox(height: 12),
+        if (invoices.isEmpty)
+          const _CompactEmpty(
+            message:
+                'Ochiq to‘lov yo‘q. Yangi hisob chiqarilsa, summa va muddat shu yerda ko‘rinadi.',
+          )
+        else
+          for (final invoice in invoices.take(4))
+            _TimelineRow(
+              time: _shortDueLabel(invoice['due_date']),
+              title: valueText(invoice, const [
+                'fee_schedule_name',
+                'period',
+                'number',
+              ], fallback: 'O‘quv to‘lovi'),
+              subtitle:
+                  '${_invoiceOutstanding(context, invoice)} · ${_dateLabel(invoice['due_date'])} gacha',
+              color: _isPastDue(invoice['due_date'])
+                  ? Theme.of(context).colorScheme.error
+                  : Sf.warn,
+              trailing: _StatusPill(
+                _isPastDue(invoice['due_date']) ? 'overdue' : 'pending',
+                warning: true,
+              ),
+            ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: () =>
+                _PortalNavigationScope.go(context, PortalSection.finance),
+            icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+            label: const Text('To‘lovlar tarixi'),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+String _invoiceOutstanding(BuildContext context, Map<String, Object?> invoice) {
+  final total = double.tryParse('${invoice['total_uzs'] ?? 0}') ?? 0;
+  final allocated = valueRows(invoice['allocations']).fold<double>(
+    0,
+    (sum, row) => sum + (double.tryParse('${row['amount_uzs'] ?? 0}') ?? 0),
+  );
+  return _money(context, (total - allocated).clamp(0, double.infinity));
+}
+
+String _shortDueLabel(Object? raw) {
+  final date = DateTime.tryParse('${raw ?? ''}')?.toLocal();
+  if (date == null) return '—';
+  return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}';
+}
+
+bool _isPastDue(Object? raw) {
+  final date = DateTime.tryParse('${raw ?? ''}')?.toLocal();
+  if (date == null) return false;
+  final now = DateTime.now();
+  return DateTime(
+    date.year,
+    date.month,
+    date.day,
+  ).isBefore(DateTime(now.year, now.month, now.day));
+}
+
+// Retained for legacy visual fixtures.
+// ignore: unused_element
 class _PerformancePanel extends StatelessWidget {
   const _PerformancePanel({
     required this.title,
@@ -1127,48 +1405,54 @@ class _TimelineRow extends StatelessWidget {
   final Widget? trailing;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(vertical: 10),
-    decoration: BoxDecoration(
-      border: Border(
-        top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final accent = colors.brightness == Brightness.dark
+        ? Color.lerp(color, colors.onSurface, .42)!
+        : color;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        ),
       ),
-    ),
-    child: Row(
-      children: [
-        SizedBox(
-          width: 44,
-          child: Text(time, style: Sf.monoStyle(size: 10.5, color: color)),
-        ),
-        Container(
-          width: 7,
-          height: 7,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-              Text(
-                subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
+      child: Row(
+        children: [
+          SizedBox(
+            width: 44,
+            child: Text(time, style: Sf.monoStyle(size: 10.5, color: accent)),
           ),
-        ),
-        if (trailing != null) ...[const SizedBox(width: 10), trailing!],
-      ],
-    ),
-  );
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          if (trailing != null) ...[const SizedBox(width: 10), trailing!],
+        ],
+      ),
+    );
+  }
 }
 
 class _CompactEmpty extends StatelessWidget {
@@ -1259,6 +1543,7 @@ class _HomePortalPage extends StatelessWidget {
             _RichMetricCard(
               title: 'Qarzdorlik',
               value: _money(
+                context,
                 payment['outstanding_uzs'] ??
                     portal.dashboard['outstanding_uzs'],
               ),
@@ -1454,7 +1739,7 @@ class _HomePortalPage extends StatelessWidget {
               ),
               _RichMetricCard(
                 title: 'Qarzdorlik',
-                value: _money(payment['outstanding_uzs']),
+                value: _money(context, payment['outstanding_uzs']),
                 icon: Icons.payments_outlined,
                 eyebrow: 'TO‘LOVLAR',
                 caption: 'Ochiq hisoblar bo‘yicha jami',
@@ -1618,6 +1903,207 @@ List<_PortalBarDatum> _attendanceBars(
   ];
 }
 
+List<String> _linksInText(String text) {
+  final links = <String>[];
+  for (final match in RegExp(r'https?://[^\s<>()]+').allMatches(text)) {
+    var link = match.group(0) ?? '';
+    while (link.isNotEmpty && '.,;:!?)]}'.contains(link[link.length - 1])) {
+      link = link.substring(0, link.length - 1);
+    }
+    if (link.isNotEmpty && !links.contains(link)) links.add(link);
+  }
+  return links;
+}
+
+class _AssignmentResource {
+  const _AssignmentResource({
+    required this.name,
+    required this.kind,
+    this.viewUrl,
+    this.downloadUrl,
+    this.downloadAllowed = false,
+  });
+
+  final String name;
+  final String kind;
+  final String? viewUrl;
+  final String? downloadUrl;
+  final bool downloadAllowed;
+
+  factory _AssignmentResource.from(Object? raw) {
+    final map = valueMap(raw);
+    final rawText = raw is String ? raw.trim() : '';
+    String? firstUrl(List<String> keys) {
+      for (final key in keys) {
+        final value = '${map[key] ?? ''}'.trim();
+        if (Uri.tryParse(value)?.hasScheme == true) return value;
+      }
+      return null;
+    }
+
+    final directUrl = Uri.tryParse(rawText)?.hasScheme == true ? rawText : null;
+    final viewUrl =
+        firstUrl(const [
+          'preview_url',
+          'view_url',
+          'url',
+          'link',
+          'public_url',
+        ]) ??
+        directUrl;
+    final downloadUrl = firstUrl(const ['download_url', 'download_link']);
+    final sourceName = valueText(map, const [
+      'name',
+      'title',
+      'filename',
+      'file_name',
+      'key',
+    ], fallback: rawText);
+    final urlName = Uri.tryParse(
+      viewUrl ?? downloadUrl ?? '',
+    )?.pathSegments.lastOrNull;
+    final name = (sourceName.isNotEmpty ? sourceName : urlName ?? 'Material')
+        .split('/')
+        .last;
+    final declaredKind = valueText(map, const [
+      'content_type',
+      'mime_type',
+      'file_type',
+      'type',
+    ], fallback: '').toLowerCase();
+    final extension = name.contains('.')
+        ? name.split('.').last.toLowerCase()
+        : '';
+    final kind = declaredKind.isNotEmpty ? declaredKind : extension;
+    final downloadAllowed =
+        map['download_allowed'] == true ||
+        map['allow_download'] == true ||
+        map['is_downloadable'] == true;
+    return _AssignmentResource(
+      name: name,
+      kind: kind,
+      viewUrl: viewUrl,
+      downloadUrl: downloadUrl,
+      downloadAllowed: downloadAllowed,
+    );
+  }
+}
+
+class _AssignmentResourceTile extends StatelessWidget {
+  const _AssignmentResourceTile({required this.resource, this.compact = false});
+
+  final Object? resource;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = _AssignmentResource.from(resource);
+    final download = item.downloadAllowed
+        ? item.downloadUrl ?? item.viewUrl
+        : null;
+    final isVideo =
+        item.kind.contains('video') ||
+        const {'mp4', 'mov', 'webm', 'mkv'}.contains(item.kind);
+    final isPdf = item.kind.contains('pdf');
+    final isImage =
+        item.kind.contains('image') ||
+        const {'png', 'jpg', 'jpeg', 'webp', 'gif'}.contains(item.kind);
+    final isLink = item.viewUrl != null && !isVideo && !isPdf && !isImage;
+    final icon = isVideo
+        ? Icons.play_circle_outline_rounded
+        : isPdf
+        ? Icons.picture_as_pdf_outlined
+        : isImage
+        ? Icons.image_outlined
+        : isLink
+        ? Icons.link_rounded
+        : Icons.attach_file_rounded;
+    final typeLabel = isVideo
+        ? 'Video lesson'
+        : isPdf
+        ? 'PDF document'
+        : isImage
+        ? 'Image'
+        : isLink
+        ? 'Learning link'
+        : item.viewUrl == null
+        ? 'Protected attachment'
+        : 'Learning material';
+    final openLabel = isVideo
+        ? 'Play'
+        : isPdf
+        ? 'View PDF'
+        : isImage
+        ? 'View'
+        : 'Open';
+    final colors = Theme.of(context).colorScheme;
+    return Material(
+      color: colors.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(13),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 10 : 12,
+          vertical: compact ? 9 : 11,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: compact ? 34 : 40,
+              height: compact ? 34 : 40,
+              decoration: BoxDecoration(
+                color: colors.primaryContainer,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(icon, size: compact ? 18 : 21, color: colors.primary),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.name,
+                    maxLines: compact ? 1 : 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    typeLabel,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (item.viewUrl case final url?)
+              IconButton.filledTonal(
+                visualDensity: VisualDensity.compact,
+                tooltip: openLabel,
+                onPressed: () => _launch(context, url),
+                icon: Icon(
+                  isVideo
+                      ? Icons.play_arrow_rounded
+                      : Icons.open_in_new_rounded,
+                ),
+              ),
+            if (download != null) ...[
+              const SizedBox(width: 4),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: 'Download',
+                onPressed: () => _launch(context, download),
+                icon: const Icon(Icons.download_rounded),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _AssignmentsPortalPage extends StatelessWidget {
   const _AssignmentsPortalPage();
 
@@ -1639,144 +2125,204 @@ class _AssignmentsPortalPage extends StatelessWidget {
           : 'Topshiriq tafsilotlari, muddat va serverdagi topshirish holati.',
       section: PortalSection.assignments,
       children: [
-        _ResponsiveGrid(
-          children: [
-            _MetricCard(
-              label: 'Jami topshiriq',
-              value: '${visible.length}',
-              icon: Icons.assignment_outlined,
-            ),
-            _MetricCard(
-              label: 'Topshirilgan',
-              value: '${submissionByAssignment.length}',
-              icon: Icons.task_alt_rounded,
-            ),
-            _MetricCard(
-              label: 'Baholangan',
-              value:
-                  '${submissionByAssignment.values.where((item) => valueMap(item['grade'])['graded'] == true).length}',
-              icon: Icons.school_outlined,
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
         if (visible.isEmpty)
           const _EmptyState(
             icon: Icons.assignment_turned_in_outlined,
-            title: 'Vazifa yo‘q',
-            message: 'Ustoz yangi vazifa e’lon qilganda shu yerda chiqadi.',
+            title: 'Hozircha faol vazifa yo‘q',
+            message:
+                'Ustoz yangi topshiriq e’lon qilganda uning matni, muddati va materiallari shu yerda ko‘rinadi.',
           )
         else
           ...visible.map((assignment) {
             final id = valueInt(assignment['id']);
             final submission = id == null ? null : submissionByAssignment[id];
+            final attempts = id == null
+                ? const <Map<String, Object?>>[]
+                : (portal.submissions
+                      .where(
+                        (item) =>
+                            valueInt(item['assignment']) == id ||
+                            valueInt(item['assignment_id']) == id,
+                      )
+                      .toList()
+                    ..sort(
+                      (a, b) => (valueInt(a['attempt_number']) ?? 0).compareTo(
+                        valueInt(b['attempt_number']) ?? 0,
+                      ),
+                    ));
             final grade = valueMap(submission?['grade']);
+            final resources = assignment['attachments'] is List
+                ? List<Object?>.from(assignment['attachments']! as List)
+                : const <Object?>[];
+            final description = valueText(assignment, const [
+              'description',
+            ], fallback: '');
+            final links = _linksInText(description);
             final canSubmit =
                 portal.can('assignments:submit') &&
                 assignmentAcceptsAnotherSubmission(assignment, submission);
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: _SectionCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        CircleAvatar(
-                          child: Text(
-                            _initials(valueText(assignment, const ['title'])),
+                padding: EdgeInsets.zero,
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      left: BorderSide(
+                        width: 4,
+                        color: submission == null
+                            ? Theme.of(context).colorScheme.primary
+                            : Sf.success,
+                      ),
+                    ),
+                  ),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primaryContainer,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Icon(
+                              Icons.assignment_outlined,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                valueText(assignment, const ['title']),
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: 5),
-                              Text(
-                                valueText(assignment, const [
-                                  'cohort_name',
-                                ], fallback: 'Guruh'),
-                              ),
-                              const SizedBox(height: 5),
-                              Text(
-                                'Muddat: ${_dateLabel(assignment['due_at'], time: true)}',
-                              ),
-                            ],
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  valueText(assignment, const ['title']),
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: 5),
+                                Text(
+                                  valueText(assignment, const [
+                                    'cohort_name',
+                                  ], fallback: 'Guruh'),
+                                ),
+                                const SizedBox(height: 5),
+                                Text(
+                                  'Muddat: ${_dateLabel(assignment['due_at'], time: true)}',
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        _StatusPill(
-                          submission == null
-                              ? valueText(assignment, const ['status'])
-                              : valueText(submission, const ['status']),
-                          positive: submission != null,
+                          _StatusPill(
+                            submission == null
+                                ? valueText(assignment, const ['status'])
+                                : valueText(submission, const ['status']),
+                            positive: submission != null,
+                          ),
+                        ],
+                      ),
+                      if (description.isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        Text(
+                          description,
+                          maxLines: 7,
+                          overflow: TextOverflow.fade,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodyMedium?.copyWith(height: 1.5),
                         ),
                       ],
-                    ),
-                    if (valueText(assignment, const [
-                      'description',
-                    ], fallback: '').isNotEmpty) ...[
-                      const SizedBox(height: 14),
-                      Text(
-                        valueText(assignment, const [
-                          'description',
-                        ], fallback: ''),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                    if (grade['graded'] == true) ...[
-                      const SizedBox(height: 12),
-                      _InlineMessage(
-                        text:
-                            'Baho: ${grade['score']} / ${assignment['max_score']}\n${valueText(grade, const ['feedback'], fallback: 'Ustoz izoh qoldirmagan.')}',
-                        error: false,
-                      ),
-                    ],
-                    if (portal.isStudent) ...[
-                      const SizedBox(height: 14),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: FilledButton.tonalIcon(
-                          onPressed:
-                              id == null || (submission == null && !canSubmit)
-                              ? null
-                              : () => showModalBottomSheet<void>(
-                                  context: context,
-                                  isScrollControlled: true,
-                                  useSafeArea: true,
-                                  builder: (_) => PortalScope(
-                                    controller: portal,
-                                    child: _AssignmentSubmitSheet(
-                                      assignment: assignment,
-                                      submission: submission,
-                                      allowSubmit: canSubmit,
-                                    ),
-                                  ),
-                                ),
-                          icon: Icon(
-                            submission == null
-                                ? Icons.upload_file_rounded
-                                : canSubmit
-                                ? Icons.replay_rounded
-                                : Icons.visibility_outlined,
+                      if (resources.isNotEmpty || links.isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        Text(
+                          'Dars materiallari',
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        for (final resource in resources.take(3))
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 7),
+                            child: _AssignmentResourceTile(
+                              resource: resource,
+                              compact: true,
+                            ),
                           ),
-                          label: Text(
-                            submission == null
-                                ? 'Topshirish'
-                                : canSubmit
-                                ? 'Qayta topshirish'
-                                : 'Ishni ko‘rish',
+                        for (final link in links.take(2))
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 7),
+                            child: _AssignmentResourceTile(
+                              resource: {'url': link, 'name': link},
+                              compact: true,
+                            ),
+                          ),
+                      ],
+                      if (grade['graded'] == true) ...[
+                        const SizedBox(height: 12),
+                        _InlineMessage(
+                          text:
+                              'Baho: ${grade['score']} / ${assignment['max_score']}\n${valueText(grade, const ['feedback'], fallback: 'Ustoz izoh qoldirmagan.')}',
+                          error: false,
+                        ),
+                      ],
+                      if (portal.isStudent || portal.isParent) ...[
+                        const SizedBox(height: 14),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: FilledButton.tonalIcon(
+                            key: id == null
+                                ? null
+                                : ValueKey('assignment-detail-$id'),
+                            onPressed: id == null
+                                ? null
+                                : () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute<void>(
+                                        builder: (_) => PortalScope(
+                                          controller: portal,
+                                          child: _AssignmentDetailScreen(
+                                            portal: portal,
+                                            assignment: assignment,
+                                            submission: submission,
+                                            attempts: attempts,
+                                            allowSubmit: canSubmit,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                            icon: Icon(
+                              portal.isParent
+                                  ? Icons.visibility_outlined
+                                  : submission == null && canSubmit
+                                  ? Icons.upload_file_rounded
+                                  : canSubmit
+                                  ? Icons.replay_rounded
+                                  : Icons.visibility_outlined,
+                            ),
+                            label: Text(
+                              portal.isParent
+                                  ? 'Tafsilotlar'
+                                  : submission == null && canSubmit
+                                  ? 'Topshirish'
+                                  : canSubmit
+                                  ? 'Qayta topshirish'
+                                  : submission == null
+                                  ? 'Tafsilotlar'
+                                  : 'Ishni ko‘rish',
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             );
@@ -1786,15 +2332,157 @@ class _AssignmentsPortalPage extends StatelessWidget {
   }
 }
 
+class _AssignmentDetailScreen extends StatefulWidget {
+  const _AssignmentDetailScreen({
+    required this.portal,
+    required this.assignment,
+    required this.submission,
+    required this.attempts,
+    required this.allowSubmit,
+  });
+
+  final PortalController portal;
+  final Map<String, Object?> assignment;
+  final Map<String, Object?>? submission;
+  final List<Map<String, Object?>> attempts;
+  final bool allowSubmit;
+
+  @override
+  State<_AssignmentDetailScreen> createState() =>
+      _AssignmentDetailScreenState();
+}
+
+class _AssignmentDetailScreenState extends State<_AssignmentDetailScreen> {
+  Map<String, Object?>? _assignment;
+  Map<String, Object?>? _submission;
+  List<Map<String, Object?>> _attempts = const [];
+  String? _error;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+    try {
+      final id = valueInt(widget.assignment['id']);
+      if (id == null) {
+        throw const ApiException(message: 'Vazifa identifikatori topilmadi.');
+      }
+      final detail = await widget.portal.loadAssignmentDetail(id);
+      var fullSubmission = widget.submission;
+      final submissionId = valueInt(widget.submission?['id']);
+      if (submissionId != null) {
+        fullSubmission = {
+          ...?widget.submission,
+          ...await widget.portal.loadSubmissionDetail(submissionId),
+        };
+      }
+      final detailedAttempts = [
+        for (final attempt in widget.attempts)
+          if (submissionId != null && valueInt(attempt['id']) == submissionId)
+            fullSubmission ?? attempt
+          else
+            attempt,
+      ];
+      if (!mounted) return;
+      setState(() {
+        _assignment = {...widget.assignment, ...detail};
+        _submission = fullSubmission;
+        _attempts = detailedAttempts;
+        _loading = false;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = _errorText(error);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Scaffold(
+      key: const ValueKey('assignment-detail-page'),
+      backgroundColor: colors.surfaceContainerLowest,
+      appBar: AppBar(
+        title: Text(
+          _familyCopy(
+            context,
+            uz: 'Vazifa tafsilotlari',
+            ru: 'Детали задания',
+            en: 'Assignment details',
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: _loading
+            ? const Center(
+                child: SizedBox.square(
+                  dimension: 32,
+                  child: CircularProgressIndicator(strokeWidth: 3),
+                ),
+              )
+            : _error != null
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: _EmptyState(
+                    icon: Icons.assignment_late_outlined,
+                    title: _familyCopy(
+                      context,
+                      uz: 'Vazifani ochib bo‘lmadi',
+                      ru: 'Не удалось открыть задание',
+                      en: 'Could not open the assignment',
+                    ),
+                    message: _error!,
+                    actionLabel: _familyCopy(
+                      context,
+                      uz: 'Qayta urinish',
+                      ru: 'Повторить',
+                      en: 'Try again',
+                    ),
+                    onAction: _load,
+                  ),
+                ),
+              )
+            : Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 920),
+                  child: _AssignmentSubmitSheet(
+                    assignment: _assignment!,
+                    submission: _submission,
+                    attempts: _attempts,
+                    allowSubmit: widget.allowSubmit,
+                  ),
+                ),
+              ),
+      ),
+    );
+  }
+}
+
 class _AssignmentSubmitSheet extends StatefulWidget {
   const _AssignmentSubmitSheet({
     required this.assignment,
     required this.allowSubmit,
+    required this.attempts,
     this.submission,
   });
 
   final Map<String, Object?> assignment;
   final Map<String, Object?>? submission;
+  final List<Map<String, Object?>> attempts;
   final bool allowSubmit;
 
   @override
@@ -1826,7 +2514,7 @@ class _AssignmentSubmitSheetState extends State<_AssignmentSubmitSheet> {
   Future<void> _pick() async {
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
-      withData: true,
+      withData: kIsWeb,
     );
     if (result == null) return;
     setState(() {
@@ -1851,10 +2539,7 @@ class _AssignmentSubmitSheetState extends State<_AssignmentSubmitSheet> {
       final portal = PortalScope.read(context);
       final keys = <String>[];
       for (final file in _files) {
-        final bytes = file.bytes;
-        if (bytes == null) {
-          throw ApiException(message: '${file.name} faylini o‘qib bo‘lmadi.');
-        }
+        final bytes = await readSelectedFileBytes(file.bytes, file.path);
         keys.add(
           await portal.uploadAssignmentFile(
             filename: file.name,
@@ -1869,8 +2554,9 @@ class _AssignmentSubmitSheetState extends State<_AssignmentSubmitSheet> {
         attachmentKeys: keys,
       );
       if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('Vazifa serverga topshirildi.')),
       );
     } on Object catch (error) {
@@ -1887,6 +2573,14 @@ class _AssignmentSubmitSheetState extends State<_AssignmentSubmitSheet> {
     final aiFeedback = valueText(grade, const ['ai_feedback'], fallback: '');
     final attempt = valueInt(widget.submission?['attempt_number']);
     final maxResubmits = valueInt(widget.assignment['max_resubmits']);
+    final assignmentAttachments = widget.assignment['attachments'] is List
+        ? List<Object?>.from(widget.assignment['attachments']! as List)
+        : const <Object?>[];
+    final description = valueText(widget.assignment, const [
+      'description',
+    ], fallback: 'Tavsif berilmagan.');
+    final descriptionLinks = _linksInText(description);
+    final rubric = valueRows(widget.assignment['rubric']);
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: ListView(
@@ -1899,10 +2593,77 @@ class _AssignmentSubmitSheetState extends State<_AssignmentSubmitSheet> {
           ),
           const SizedBox(height: 8),
           Text(
-            valueText(widget.assignment, const [
-              'description',
-            ], fallback: 'Tavsif berilmagan.'),
+            description,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(height: 1.5),
           ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _StatusPill(
+                'Muddat: ${_dateLabel(widget.assignment['due_at'], time: true)}',
+                warning:
+                    DateTime.tryParse(
+                      '${widget.assignment['due_at']}',
+                    )?.isBefore(DateTime.now()) ==
+                    true,
+              ),
+              _StatusPill(
+                'Maksimum: ${widget.assignment['max_score'] ?? '—'}',
+                positive: true,
+              ),
+              _StatusPill(
+                'Urinishlar: ${maxResubmits == null ? 'cheklanmagan' : maxResubmits + 1}',
+              ),
+            ],
+          ),
+          if (assignmentAttachments.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text(
+              'Dars materiallari',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            for (final attachment in assignmentAttachments)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _AssignmentResourceTile(resource: attachment),
+              ),
+          ],
+          if (descriptionLinks.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            for (final link in descriptionLinks)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _AssignmentResourceTile(
+                  resource: {'url': link, 'name': link},
+                ),
+              ),
+          ],
+          if (rubric.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text(
+              'Baholash mezonlari',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 6),
+            for (final criterion in rubric)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.rule_folder_outlined),
+                title: Text(
+                  valueText(criterion, const ['criterion', 'title', 'name']),
+                ),
+                trailing: Text(
+                  '${criterion['max_points'] ?? criterion['points'] ?? '—'} ball',
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+              ),
+          ],
           if (attempt != null) ...[
             const SizedBox(height: 12),
             _InlineMessage(
@@ -1980,6 +2741,71 @@ class _AssignmentSubmitSheetState extends State<_AssignmentSubmitSheet> {
             if (grade['graded'] != true && aiFeedback.isEmpty)
               const _InlineMessage(text: 'Tekshirilmoqda', error: false),
           ],
+          if (widget.attempts.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            Text(
+              'Topshirish tarixi',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            for (final previous in widget.attempts)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _SectionCard(
+                  child: ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    title: Text(
+                      '${previous['attempt_number'] ?? '—'}-urinish · ${_statusLabel('${previous['status']}')}',
+                    ),
+                    subtitle: Text(
+                      '${_dateLabel(previous['submitted_at'], time: true)}${previous['is_late'] == true ? ' · kech topshirilgan' : ''}',
+                    ),
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          valueText(previous, const [
+                            'text',
+                          ], fallback: 'Matnli javob yo‘q.'),
+                        ),
+                      ),
+                      if (previous['attachments'] is List &&
+                          (previous['attachments']! as List).isNotEmpty)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                for (final attachment
+                                    in previous['attachments']! as List)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 7),
+                                    child: _AssignmentResourceTile(
+                                      resource: attachment,
+                                      compact: true,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      if (valueMap(previous['grade']).isNotEmpty)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              'Baho: ${valueMap(previous['grade'])['score'] ?? 'tekshirilmoqda'}\n${valueText(valueMap(previous['grade']), const ['feedback'], fallback: 'Ustoz izohi yo‘q.')}',
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
           if (_error case final error?) ...[
             const SizedBox(height: 12),
             _InlineMessage(text: error, error: true),
@@ -2022,141 +2848,597 @@ class _SchedulePortalPage extends StatelessWidget {
     final rows = [...portal.lessons]
       ..sort((a, b) => '${a['starts_at']}'.compareTo('${b['starts_at']}'));
     return _PortalPage(
-      title: portal.isParent ? 'Oila taqvimi' : 'Dars jadvali',
+      title: portal.isParent
+          ? _familyCopy(
+              context,
+              uz: 'Oila taqvimi',
+              ru: 'Семейный календарь',
+              en: 'Family calendar',
+            )
+          : _familyCopy(
+              context,
+              uz: 'Dars jadvali',
+              ru: 'Расписание занятий',
+              en: 'Class schedule',
+            ),
       subtitle: portal.isParent
-          ? 'Farzandingizning darslari, vaqti va xonasi.'
-          : 'Bugungi darslar, o‘quv davri va kalendar sinxronizatsiyasi.',
+          ? _familyCopy(
+              context,
+              uz: 'Farzandingizning darslari, vaqti va xonasi.',
+              ru: 'Занятия ребёнка, время и кабинет.',
+              en: 'Your child’s classes, times and rooms.',
+            )
+          : _familyCopy(
+              context,
+              uz: 'Dars vaqti, xonasi va ustoz haqidagi kerakli ma’lumotlar.',
+              ru: 'Время, кабинет и преподаватель для каждого занятия.',
+              en: 'The time, room and teacher for each class.',
+            ),
       section: PortalSection.schedule,
-      trailing: portal.calendarUrl.isEmpty
-          ? null
-          : FilledButton.tonalIcon(
-              onPressed: () => _launch(context, portal.calendarUrl),
-              icon: const Icon(Icons.calendar_month_outlined),
-              label: const Text('Kalendarni ulash'),
-            ),
       children: [
-        _ResponsiveGrid(
-          children: [
-            _MetricCard(
-              label: 'Darslar',
-              value: '${rows.length}',
-              icon: Icons.event_note_outlined,
-            ),
-            _MetricCard(
-              label: 'O‘quv davrlari',
-              value: '${portal.terms.length}',
-              icon: Icons.date_range_outlined,
-            ),
-            _MetricCard(
-              label: 'Dars turlari',
-              value: '${portal.lessonTypes.length}',
-              icon: Icons.category_outlined,
-            ),
-            _MetricCard(
-              label: 'Takroriy rejalar',
-              value: '${portal.scheduleRules.length}',
-              icon: Icons.repeat_rounded,
-            ),
-          ],
+        _PageSectionTitle(
+          title: _familyCopy(
+            context,
+            uz: 'Darslar',
+            ru: 'Занятия',
+            en: 'Classes',
+          ),
+          count: rows.length,
         ),
-        if (portal.timeSlots.isNotEmpty || portal.lessonTypes.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          _SectionCard(
+        const SizedBox(height: 10),
+        if (rows.isEmpty)
+          _EmptyState(
+            icon: Icons.calendar_today_outlined,
+            title: _familyCopy(
+              context,
+              uz: 'Jadval bo‘sh',
+              ru: 'Расписание пусто',
+              en: 'Schedule is empty',
+            ),
+            message: _familyCopy(
+              context,
+              uz: 'Hozircha ko‘rinadigan dars mavjud emas.',
+              ru: 'Пока нет доступных занятий.',
+              en: 'There are no visible classes yet.',
+            ),
+          )
+        else
+          _LessonScheduleGrid(
+            lessons: rows,
+            onOpen: (lesson) => _openLesson(context, portal, lesson),
+          ),
+      ],
+    );
+  }
+
+  void _openLesson(
+    BuildContext context,
+    PortalController portal,
+    Map<String, Object?> lesson,
+  ) {
+    final id = valueInt(lesson['id']);
+    if (id == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PortalScope(
+          controller: portal,
+          child: _LessonDetailScreen(
+            portal: portal,
+            lessonId: id,
+            initialLesson: lesson,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LessonDetailScreen extends StatefulWidget {
+  const _LessonDetailScreen({
+    required this.portal,
+    required this.lessonId,
+    required this.initialLesson,
+  });
+
+  final PortalController portal;
+  final int lessonId;
+  final Map<String, Object?> initialLesson;
+
+  @override
+  State<_LessonDetailScreen> createState() => _LessonDetailScreenState();
+}
+
+class _LessonDetailScreenState extends State<_LessonDetailScreen> {
+  late Future<Map<String, Object?>> _future = _load();
+
+  Future<Map<String, Object?>> _load() async => {
+    ...widget.initialLesson,
+    ...await widget.portal.loadScheduleLessonDetail(widget.lessonId),
+  };
+
+  void _retry() => setState(() => _future = _load());
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Scaffold(
+      backgroundColor: colors.surfaceContainerLowest,
+      appBar: AppBar(
+        title: Text(
+          _familyCopy(
+            context,
+            uz: 'Dars tafsilotlari',
+            ru: 'Детали занятия',
+            en: 'Class details',
+          ),
+        ),
+      ),
+      body: FutureBuilder<Map<String, Object?>>(
+        future: _future,
+        initialData: widget.initialLesson,
+        builder: (context, snapshot) {
+          final lesson = snapshot.data ?? widget.initialLesson;
+          return Stack(
+            children: [
+              _LessonDetailBody(lesson: lesson),
+              if (snapshot.connectionState == ConnectionState.waiting)
+                const Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  child: LinearProgressIndicator(minHeight: 2),
+                ),
+              if (snapshot.hasError)
+                Positioned(
+                  left: 14,
+                  right: 14,
+                  bottom: 14,
+                  child: Material(
+                    color: colors.errorContainer,
+                    borderRadius: BorderRadius.circular(16),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+                      child: Row(
+                        children: [
+                          Icon(Icons.cloud_off_rounded, color: colors.error),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              _familyCopy(
+                                context,
+                                uz: 'To‘liq ma’lumot yuklanmadi. Jadvaldagi ma’lumot ko‘rsatildi.',
+                                ru: 'Полные данные не загрузились. Показаны данные из расписания.',
+                                en: 'Full details could not be loaded. Schedule data is shown.',
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _retry,
+                            child: Text(
+                              _familyCopy(
+                                context,
+                                uz: 'Qayta',
+                                ru: 'Повторить',
+                                en: 'Retry',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _LessonDetailBody extends StatelessWidget {
+  const _LessonDetailBody({required this.lesson});
+
+  final Map<String, Object?> lesson;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final title = valueText(
+      lesson,
+      const ['title', 'lesson_type_name'],
+      fallback: _familyCopy(
+        context,
+        uz: 'Rejalashtirilgan dars',
+        ru: 'Запланированное занятие',
+        en: 'Scheduled class',
+      ),
+    );
+    final status = '${lesson['status'] ?? ''}';
+    final cancelled = status.toLowerCase().contains('cancel');
+    final fields = <(IconData, String, String)>[
+      (
+        Icons.calendar_month_outlined,
+        _familyCopy(context, uz: 'Davr', ru: 'Период', en: 'Term'),
+        valueText(lesson, const ['term_name'], fallback: '—'),
+      ),
+      (
+        Icons.groups_2_outlined,
+        _familyCopy(context, uz: 'Guruh', ru: 'Группа', en: 'Group'),
+        valueText(lesson, const ['cohort_name'], fallback: '—'),
+      ),
+      (
+        Icons.person_outline_rounded,
+        _familyCopy(context, uz: 'Ustoz', ru: 'Преподаватель', en: 'Teacher'),
+        valueText(lesson, const ['teacher_name'], fallback: '—'),
+      ),
+      (
+        Icons.meeting_room_outlined,
+        _familyCopy(context, uz: 'Xona', ru: 'Кабинет', en: 'Room'),
+        valueText(lesson, const ['room_name'], fallback: '—'),
+      ),
+      (
+        Icons.school_outlined,
+        _familyCopy(
+          context,
+          uz: 'Dars turi',
+          ru: 'Тип занятия',
+          en: 'Class type',
+        ),
+        valueText(lesson, const ['lesson_type_name'], fallback: '—'),
+      ),
+      (
+        Icons.schedule_rounded,
+        _familyCopy(context, uz: 'Boshlanish', ru: 'Начало', en: 'Starts'),
+        _dateLabel(lesson['starts_at'], time: true),
+      ),
+      (
+        Icons.timelapse_rounded,
+        _familyCopy(context, uz: 'Tugash', ru: 'Окончание', en: 'Ends'),
+        _dateLabel(lesson['ends_at'], time: true),
+      ),
+      (
+        Icons.repeat_rounded,
+        _familyCopy(
+          context,
+          uz: 'Takroriy reja',
+          ru: 'Повторяющийся план',
+          en: 'Recurring plan',
+        ),
+        lesson['detached_from_rule'] == true
+            ? _familyCopy(
+                context,
+                uz: 'Rejadan ajratilgan',
+                ru: 'Отделено от плана',
+                en: 'Detached from plan',
+              )
+            : _familyCopy(
+                context,
+                uz: 'Reja bo‘yicha',
+                ru: 'По плану',
+                en: 'Follows the plan',
+              ),
+      ),
+    ];
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 110),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: cancelled
+                  ? [colors.error, colors.errorContainer]
+                  : [colors.primary, colors.secondary],
+            ),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .18),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                  _statusLabel(status).toUpperCase(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: .8,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${_dateLabel(lesson['starts_at'])} · ${_timeOnly(lesson['starts_at'])}–${_timeOnly(lesson['ends_at'])}',
+                style: const TextStyle(color: Colors.white, height: 1.4),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _SectionCard(
+          padding: EdgeInsets.zero,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth >= 660 ? 2 : 1;
+              return Wrap(
+                children: [
+                  for (final field in fields)
+                    SizedBox(
+                      width: constraints.maxWidth / columns,
+                      child: ListTile(
+                        leading: Icon(field.$1, color: colors.primary),
+                        title: Text(field.$2),
+                        subtitle: Text(
+                          field.$3,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ),
+        if (cancelled ||
+            valueText(lesson, const ['cancel_reason']).isNotEmpty) ...[
+          const SizedBox(height: 14),
+          _InlineMessage(
+            text: valueText(
+              lesson,
+              const ['cancel_reason'],
+              fallback: _familyCopy(
+                context,
+                uz: 'Dars markaz tomonidan bekor qilingan.',
+                ru: 'Занятие отменено учебным центром.',
+                en: 'The class was cancelled by the learning center.',
+              ),
+            ),
+            error: true,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _LessonScheduleGrid extends StatelessWidget {
+  const _LessonScheduleGrid({required this.lessons, required this.onOpen});
+
+  final List<Map<String, Object?>> lessons;
+  final ValueChanged<Map<String, Object?>> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final columns = switch (width) {
+          _ when width < 280 || textScale >= 1.75 => 1,
+          _ when width < 600 => 2,
+          _ when width < 900 => 3,
+          _ when width < 1200 => 4,
+          _ => 5,
+        };
+        const gap = 10.0;
+        final cardWidth = (width - gap * (columns - 1)) / columns;
+        return Wrap(
+          key: const ValueKey('schedule-lessons-grid'),
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final lesson in lessons)
+              SizedBox(
+                width: cardWidth,
+                child: _LessonScheduleCard(
+                  lesson: lesson,
+                  onOpen: valueInt(lesson['id']) == null
+                      ? null
+                      : () => onOpen(lesson),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _LessonScheduleCard extends StatelessWidget {
+  const _LessonScheduleCard({required this.lesson, required this.onOpen});
+
+  final Map<String, Object?> lesson;
+  final VoidCallback? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final status = '${lesson['status'] ?? ''}'.toLowerCase();
+    final startsAt = DateTime.tryParse(
+      '${lesson['starts_at'] ?? ''}',
+    )?.toLocal();
+    final endsAt = DateTime.tryParse('${lesson['ends_at'] ?? ''}')?.toLocal();
+    final now = DateTime.now();
+    final inProgress =
+        startsAt != null &&
+        endsAt != null &&
+        !now.isBefore(startsAt) &&
+        now.isBefore(endsAt) &&
+        status != 'cancelled' &&
+        status != 'canceled';
+    final cancelled = status == 'cancelled' || status == 'canceled';
+    final completed =
+        status == 'completed' ||
+        (endsAt != null && endsAt.isBefore(now) && !cancelled);
+    final accent = cancelled
+        ? colors.error
+        : inProgress
+        ? Sf.success
+        : completed
+        ? colors.onSurfaceVariant
+        : colors.primary;
+    final statusLabel = inProgress
+        ? 'Hozir'
+        : _statusLabel(status.isEmpty ? 'scheduled' : status);
+    final id = valueInt(lesson['id']);
+
+    return _SectionCard(
+      padding: EdgeInsets.zero,
+      child: InkWell(
+        key: ValueKey('schedule-lesson-card-${id ?? 'unknown'}'),
+        onTap: onOpen,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 172),
+          child: Padding(
+            padding: const EdgeInsets.all(11),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _DensePanelHeader(
-                  title: 'Jadval katalogi',
-                  meta:
-                      '${portal.timeSlots.length} vaqt · ${portal.lessonTypes.length} tur',
-                  icon: Icons.tune_rounded,
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colors.primaryContainer,
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: Text(
+                        _compactDateLabel(lesson['starts_at']),
+                        maxLines: 1,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: colors.onPrimaryContainer,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Icon(Icons.circle, size: 7, color: accent),
+                          const SizedBox(width: 5),
+                          Flexible(
+                            child: Text(
+                              statusLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: accent,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
-                Wrap(
-                  spacing: 7,
-                  runSpacing: 7,
+                Text(
+                  valueText(lesson, const ['title'], fallback: 'Dars'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    height: 1.15,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _LessonMetaLine(
+                  icon: Icons.person_outline_rounded,
+                  text: valueText(lesson, const [
+                    'teacher_name',
+                  ], fallback: 'Ustoz'),
+                ),
+                const SizedBox(height: 5),
+                _LessonMetaLine(
+                  icon: Icons.meeting_room_outlined,
+                  text: valueText(lesson, const [
+                    'room_name',
+                  ], fallback: 'Xona belgilanmagan'),
+                ),
+                const SizedBox(height: 9),
+                Row(
                   children: [
-                    for (final slot in portal.timeSlots)
-                      _CatalogPill(
-                        icon: Icons.schedule_rounded,
-                        label: valueText(slot, const [
-                          'name',
-                        ], fallback: 'Vaqt oralig‘i'),
-                        detail:
-                            '${valueText(slot, const ['start_time', 'starts_at'])}–${valueText(slot, const ['end_time', 'ends_at'])}',
+                    Icon(Icons.schedule_rounded, size: 15, color: accent),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        '${_timeOnly(lesson['starts_at'])}–${_timeOnly(lesson['ends_at'])}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
+                              color: colors.onSurface,
+                              fontWeight: FontWeight.w800,
+                            ),
                       ),
-                    for (final type in portal.lessonTypes)
-                      _CatalogPill(
-                        icon: Icons.category_outlined,
-                        label: valueText(type, const ['name', 'title']),
+                    ),
+                    Tooltip(
+                      key: ValueKey('lesson-detail-${id ?? 'unknown'}'),
+                      message: 'Dars tafsilotlari',
+                      child: Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 17,
+                        color: onOpen == null ? colors.outline : accent,
                       ),
+                    ),
                   ],
                 ),
               ],
             ),
           ),
-        ],
-        const SizedBox(height: 16),
-        _PageSectionTitle(title: 'Darslar', count: rows.length),
-        const SizedBox(height: 10),
-        if (rows.isEmpty)
-          const _EmptyState(
-            icon: Icons.calendar_today_outlined,
-            title: 'Jadval bo‘sh',
-            message: 'Hozircha ko‘rinadigan dars mavjud emas.',
-          )
-        else
-          ...rows.map(
-            (lesson) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _SectionCard(
-                child: Row(
-                  children: [
-                    Container(
-                      width: 58,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Column(
-                        children: [
-                          Text(_compactDateLabel(lesson['starts_at'])),
-                          Text(
-                            _timeOnly(lesson['starts_at']),
-                            style: Theme.of(context).textTheme.labelSmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            valueText(lesson, const ['title']),
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${valueText(lesson, const ['teacher_name'], fallback: 'Ustoz')} · ${valueText(lesson, const ['room_name'], fallback: 'Xona belgilanmagan')}',
-                          ),
-                          Text(
-                            '${_timeOnly(lesson['starts_at'])}–${_timeOnly(lesson['ends_at'])}',
-                          ),
-                        ],
-                      ),
-                    ),
-                    _StatusPill(
-                      valueText(lesson, const ['status']),
-                      positive: lesson['status'] == 'scheduled',
-                    ),
-                  ],
-                ),
-              ),
-            ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LessonMetaLine extends StatelessWidget {
+  const _LessonMetaLine({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: colors.onSurfaceVariant),
+        const SizedBox(width: 5),
+        Expanded(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
           ),
+        ),
       ],
     );
   }
@@ -2203,6 +3485,7 @@ class _AttendancePortalPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final portal = PortalScope.of(context);
     final summary = portal.attendanceSummary;
+    final hasSummary = summary.isNotEmpty;
     final studentId = portal.selectedStudentId;
     final rows = portal.isParent && studentId != null
         ? portal.attendance
@@ -2219,40 +3502,50 @@ class _AttendancePortalPage extends StatelessWidget {
       subtitle: 'Joriy davr bo‘yicha belgilangan qatnashuv holatlari.',
       section: PortalSection.attendance,
       children: [
+        if (!hasSummary) ...[
+          const _InlineMessage(
+            text:
+                'Hisoblash uchun joriy o‘quv davri topilmadi. Bu 0% degani emas — davr yoki davomat yozuvlari serverda yaratilishi kerak.',
+            error: false,
+          ),
+          const SizedBox(height: 12),
+        ],
         _ResponsiveGrid(
           children: [
             _MetricCard(
               label: 'O‘z vaqtida',
-              value: '${summary['percent_present'] ?? 0}%',
+              value: hasSummary ? '${summary['percent_present']}%' : '—',
               icon: Icons.donut_large_rounded,
             ),
             _MetricCard(
               label: 'Keldi',
-              value: '${summary['present'] ?? 0}',
+              value: hasSummary ? '${summary['present'] ?? 0}' : '—',
               icon: Icons.check_circle_outline_rounded,
             ),
             _MetricCard(
               label: 'Kechikdi',
-              value: '${summary['late'] ?? 0}',
+              value: hasSummary ? '${summary['late'] ?? 0}' : '—',
               icon: Icons.schedule_rounded,
             ),
             _MetricCard(
               label: 'Kelmadi',
-              value: '${summary['absent'] ?? 0}',
+              value: hasSummary ? '${summary['absent'] ?? 0}' : '—',
               icon: Icons.cancel_outlined,
             ),
           ],
         ),
         const SizedBox(height: 16),
-        _LearningInsightPanel(
-          title: 'Davomat taqsimoti',
-          ringLabel: 'Vaqtida',
-          ringValue: timelyRate,
-          ringDetail:
-              '${summary['present'] ?? 0} ta darsga o‘z vaqtida kelgan. Kechikish bu ko‘rsatkichka kirmaydi.',
-          items: _attendanceBars(rows, colors),
-          emptyLabel: 'Davomat yozuvlari kelganda taqsimot shu yerda chiqadi.',
-        ),
+        if (hasSummary)
+          _LearningInsightPanel(
+            title: 'Davomat taqsimoti',
+            ringLabel: 'Vaqtida',
+            ringValue: timelyRate,
+            ringDetail:
+                '${summary['present'] ?? 0} ta darsga o‘z vaqtida kelgan. Kechikish bu ko‘rsatkichka kirmaydi.',
+            items: _attendanceBars(rows, colors),
+            emptyLabel:
+                'Davomat yozuvlari kelganda taqsimot shu yerda chiqadi.',
+          ),
         const SizedBox(height: 24),
         if (rows.isEmpty)
           const _EmptyState(
@@ -2272,29 +3565,105 @@ class _AttendancePortalPage extends StatelessWidget {
               positive: row['status'] == 'present',
               warning: row['status'] == 'late',
             ),
+            onTap: (row) async {
+              final id = valueInt(row['id']);
+              if (id == null) return;
+              final loaded = await _loadApiDetail(
+                context,
+                () => portal.loadAttendanceRecordDetail(id),
+              );
+              if (loaded == null || !context.mounted) return;
+              final detail = {...row, ...loaded};
+              await _showJsonDetail(
+                context,
+                title: valueText(detail, const ['lesson_title']),
+                fields: {
+                  'O‘quvchi': valueText(detail, const ['student_name']),
+                  'Guruh': valueText(detail, const ['cohort_name']),
+                  'Ustoz': valueText(detail, const ['teacher_name']),
+                  'Dars': _dateLabel(detail['lesson_starts_at'], time: true),
+                  'Holat': _statusLabel('${detail['status']}'),
+                  'Kelgan vaqt': _dateLabel(detail['arrived_at'], time: true),
+                  'Izoh': valueText(detail, const ['note']),
+                  'Belgilangan': _dateLabel(detail['marked_at'], time: true),
+                  'Avtomatik': detail['auto_marked'] == true ? 'Ha' : 'Yo‘q',
+                },
+                rawDetail: loaded,
+              );
+            },
           ),
       ],
     );
   }
 }
 
-String _contentType(String? extension) => switch ((extension ?? '')
-    .toLowerCase()) {
+String _contentType(
+  String? extension, {
+  String filename = '',
+}) => switch ((extension ?? '').toLowerCase()) {
   'pdf' => 'application/pdf',
   'mp3' => 'audio/mpeg',
   'm4a' => 'audio/mp4',
   'ogg' => 'audio/ogg',
   'opus' => 'audio/opus',
   'wav' => 'audio/wav',
-  'webm' => 'audio/webm',
+  'webm' =>
+    filename.toLowerCase().contains('voice-') ? 'audio/webm' : 'video/webm',
   'png' => 'image/png',
   'jpg' || 'jpeg' => 'image/jpeg',
+  'gif' => 'image/gif',
+  'webp' => 'image/webp',
+  'heic' => 'image/heic',
+  'heif' => 'image/heif',
+  'mp4' || 'm4v' => 'video/mp4',
+  'mov' => 'video/quicktime',
+  '3gp' => 'video/3gpp',
   'doc' => 'application/msword',
   'docx' =>
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'txt' => 'text/plain',
   _ => 'application/octet-stream',
 };
+
+({String extension, String contentType}) recordedVoiceUploadFormat(
+  Uint8List bytes,
+  String fallbackExtension,
+) {
+  bool hasAscii(int offset, String value) {
+    if (offset < 0 || bytes.length < offset + value.length) return false;
+    for (var index = 0; index < value.length; index++) {
+      if (bytes[offset + index] != value.codeUnitAt(index)) return false;
+    }
+    return true;
+  }
+
+  if (hasAscii(4, 'ftyp')) {
+    if (hasAscii(8, 'M4A ')) {
+      return (extension: 'm4a', contentType: 'audio/mp4');
+    }
+    // Safety fallback for a recording that has not passed through
+    // normalizeRecordedM4aBrand yet. It must never be declared audio/mp4.
+    return (extension: 'mp4', contentType: 'video/mp4');
+  }
+  if (hasAscii(0, 'RIFF') && hasAscii(8, 'WAVE')) {
+    return (extension: 'wav', contentType: 'audio/wav');
+  }
+  if (hasAscii(0, 'OggS')) {
+    return (extension: 'ogg', contentType: 'audio/ogg');
+  }
+  if (bytes.length >= 4 &&
+      bytes[0] == 0x1A &&
+      bytes[1] == 0x45 &&
+      bytes[2] == 0xDF &&
+      bytes[3] == 0xA3) {
+    return (extension: 'webm', contentType: 'audio/webm');
+  }
+  final extension = fallbackExtension.toLowerCase();
+  return (
+    extension: extension,
+    contentType: _contentType(extension, filename: 'voice.$extension'),
+  );
+}
 
 String _timeOnly(Object? raw) {
   final date = DateTime.tryParse('${raw ?? ''}')?.toLocal();
@@ -2313,9 +3682,17 @@ class _PageSectionTitle extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: Text(title, style: Theme.of(context).textTheme.titleLarge),
+          child: Text(
+            _portalUiLiteral(context, title),
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
         ),
-        if (count != null) _StatusPill('$count ta'),
+        if (count != null)
+          _StatusPill(switch (PortalScope.of(context).preferences.language) {
+            PortalLanguage.uz => '$count ta',
+            PortalLanguage.ru => '$count',
+            PortalLanguage.en => '$count',
+          }),
       ],
     );
   }
@@ -2329,6 +3706,7 @@ class _SimpleRows extends StatelessWidget {
     required this.subtitle,
     this.trailing,
     this.onTap,
+    this.rowKey,
   });
 
   final List<Map<String, Object?>> rows;
@@ -2337,6 +3715,7 @@ class _SimpleRows extends StatelessWidget {
   final String Function(Map<String, Object?>) subtitle;
   final Widget Function(Map<String, Object?>)? trailing;
   final void Function(Map<String, Object?>)? onTap;
+  final Key? Function(Map<String, Object?>)? rowKey;
 
   @override
   Widget build(BuildContext context) {
@@ -2346,6 +3725,7 @@ class _SimpleRows extends StatelessWidget {
         children: [
           for (var index = 0; index < rows.length; index++) ...[
             ListTile(
+              key: rowKey?.call(rows[index]),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
                 vertical: 6,
@@ -2451,7 +3831,9 @@ class _AcademicsPortalPage extends StatelessWidget {
                 for (final subject in portal.subjects)
                   _CatalogPill(
                     icon: Icons.menu_book_outlined,
-                    label: valueText(subject, const ['name', 'title']),
+                    label:
+                        '${valueText(subject, const ['name', 'title'])} · ${valueText(subject, const ['code'])}',
+                    detail: valueText(subject, const ['description']),
                   ),
                 for (final type in portal.examTypes)
                   _CatalogPill(
@@ -2500,6 +3882,7 @@ class _AcademicsPortalPage extends StatelessWidget {
         else
           _SimpleRows(
             rows: grades,
+            rowKey: (row) => ValueKey('grade-detail-${row['id']}'),
             icon: Icons.grade_outlined,
             title: (row) => valueText(row, const ['subject_name']),
             subtitle: (row) =>
@@ -2508,15 +3891,33 @@ class _AcademicsPortalPage extends StatelessWidget {
               row['is_published'] == true ? 'E’lon qilingan' : 'Kutilmoqda',
               positive: row['is_published'] == true,
             ),
-            onTap: (row) => _showJsonDetail(
-              context,
-              title: valueText(row, const ['subject_name']),
-              fields: {
-                'Baho': valueText(row, const ['value_display', 'value_raw']),
-                'Tarkib': _readable(row['components']),
-                'Hisoblangan': _dateLabel(row['computed_at'], time: true),
-              },
-            ),
+            onTap: (row) async {
+              final id = valueInt(row['id']);
+              if (id == null) return;
+              final loaded = await _loadApiDetail(
+                context,
+                () => portal.loadGradeDetail(id),
+              );
+              if (loaded == null || !context.mounted) return;
+              final detail = {...row, ...loaded};
+              await _showJsonDetail(
+                context,
+                title: valueText(detail, const ['subject_name']),
+                fields: {
+                  'Baho': valueText(detail, const [
+                    'value_display',
+                    'value_raw',
+                  ]),
+                  'Tarkib': _gradeComponentsLabel(detail['components']),
+                  'E’lon qilingan': _dateLabel(
+                    detail['published_at'],
+                    time: true,
+                  ),
+                  'Hisoblangan': _dateLabel(detail['computed_at'], time: true),
+                },
+                rawDetail: loaded,
+              );
+            },
           ),
         const SizedBox(height: 24),
         _PageSectionTitle(title: 'Imtihonlar', count: visibleExams.length),
@@ -2528,6 +3929,44 @@ class _AcademicsPortalPage extends StatelessWidget {
             title: (row) => valueText(row, const ['title']),
             subtitle: (row) =>
                 '${valueText(row, const ['subject_name'])} · ${_dateLabel(row['exam_date'])} · maksimum ${row['max_score']}',
+            trailing: (row) => _StatusPill(
+              valueText(valueMap(row['exam_type_detail']), const [
+                'name',
+              ], fallback: 'Nazorat'),
+              positive: row['is_published'] == true,
+            ),
+            onTap: (row) async {
+              final id = valueInt(row['id']);
+              if (id == null) return;
+              final loaded = await _loadApiDetail(
+                context,
+                () => portal.loadExamDetail(id),
+              );
+              if (loaded == null || !context.mounted) return;
+              final detail = {...row, ...loaded};
+              await _showJsonDetail(
+                context,
+                title: valueText(detail, const ['title']),
+                fields: {
+                  'Fan': valueText(detail, const ['subject_name']),
+                  'Guruh': valueText(detail, const ['cohort_name']),
+                  'O‘quv davri': valueText(detail, const ['term_name']),
+                  'Nazorat turi': valueText(
+                    valueMap(detail['exam_type_detail']),
+                    const ['name'],
+                    fallback: 'Ko‘rsatilmagan',
+                  ),
+                  'Sana': _dateLabel(detail['exam_date']),
+                  'Maksimal ball': '${detail['max_score'] ?? '—'}',
+                  'Og‘irlik': '${detail['weight'] ?? '—'}',
+                  'E’lon qilingan': _dateLabel(
+                    detail['published_at'],
+                    time: true,
+                  ),
+                },
+                rawDetail: loaded,
+              );
+            },
           )
         else
           const _EmptyState(
@@ -2561,6 +4000,35 @@ class _AcademicsPortalPage extends StatelessWidget {
                       onPressed: () => _launch(context, url),
                       icon: const Icon(Icons.open_in_new_rounded),
                     );
+            },
+            onTap: (row) async {
+              final id = valueInt(row['id']);
+              if (id == null) return;
+              final loaded = await _loadApiDetail(
+                context,
+                () => portal.loadTranscriptDetail(id),
+              );
+              if (loaded == null || !context.mounted) return;
+              final detail = {...row, ...loaded};
+              await _showJsonDetail(
+                context,
+                title: 'Tabel #$id',
+                fields: {
+                  'Holat': _statusLabel('${detail['status']}'),
+                  'O‘quvchi': valueText(detail, const ['student_name']),
+                  'O‘quv davri': valueText(detail, const ['term_name']),
+                  'So‘ralgan': _dateLabel(detail['created_at'], time: true),
+                  'Tayyorlangan': _dateLabel(
+                    detail['generated_at'],
+                    time: true,
+                  ),
+                  'Xatolik': valueText(detail, const [
+                    'error_message',
+                    'error',
+                  ]),
+                },
+                rawDetail: loaded,
+              );
             },
           ),
       ],
@@ -2706,6 +4174,41 @@ class _ContentPortalPageState extends State<_ContentPortalPage> {
                       ], fallback: 'Material matni berilmagan.'),
                     ),
                   ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: valueInt(material['id']) == null
+                          ? null
+                          : () async {
+                              final id = valueInt(material['id'])!;
+                              final loaded = await _loadApiDetail(
+                                context,
+                                () => portal.loadContentDetail('materials', id),
+                              );
+                              if (loaded == null || !context.mounted) return;
+                              final detail = {...material, ...loaded};
+                              await _showJsonDetail(
+                                context,
+                                title: valueText(detail, const ['title']),
+                                fields: {
+                                  'Kutubxona': valueText(detail, const [
+                                    'library_name',
+                                  ]),
+                                  'Mavzu': valueText(detail, const ['topic']),
+                                  'Holat': _statusLabel('${detail['status']}'),
+                                  'Matn': valueText(detail, const ['body']),
+                                  'Nashr qilingan': _dateLabel(
+                                    detail['published_at'],
+                                    time: true,
+                                  ),
+                                },
+                                rawDetail: loaded,
+                              );
+                            },
+                      icon: const Icon(Icons.info_outline_rounded),
+                      label: const Text('To‘liq tafsilotlar'),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -2732,9 +4235,47 @@ class _ContentPortalPageState extends State<_ContentPortalPage> {
               runSpacing: 7,
               children: [
                 for (final folder in portal.folders)
-                  _CatalogPill(
-                    icon: Icons.folder_outlined,
-                    label: valueText(folder, const ['name', 'title']),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(99),
+                    onTap: valueInt(folder['id']) == null
+                        ? null
+                        : () async {
+                            final id = valueInt(folder['id'])!;
+                            final loaded = await _loadApiDetail(
+                              context,
+                              () => portal.loadContentDetail('folders', id),
+                            );
+                            if (loaded == null || !context.mounted) return;
+                            final detail = {...folder, ...loaded};
+                            await _showJsonDetail(
+                              context,
+                              title: valueText(detail, const ['name', 'title']),
+                              fields: {
+                                'Kutubxona': valueText(detail, const [
+                                  'library_name',
+                                ]),
+                                'Yuqori papka': valueText(detail, const [
+                                  'parent_name',
+                                ]),
+                                'Holat': _statusLabel('${detail['status']}'),
+                                'Yaratilgan': _dateLabel(
+                                  detail['created_at'],
+                                  time: true,
+                                ),
+                              },
+                              rawDetail: loaded,
+                            );
+                          },
+                    child: _CatalogPill(
+                      icon: Icons.folder_outlined,
+                      label:
+                          valueText(folder, const [
+                            'parent_name',
+                          ], fallback: '').isEmpty
+                          ? valueText(folder, const ['name', 'title'])
+                          : '${valueText(folder, const ['parent_name'])} / ${valueText(folder, const ['name', 'title'])}',
+                      detail: valueText(folder, const ['library_name']),
+                    ),
                   ),
               ],
             ),
@@ -2773,25 +4314,43 @@ class _ContentPortalPageState extends State<_ContentPortalPage> {
                     message: 'Yuklab olish yopiq',
                     child: Icon(Icons.lock_outline_rounded),
                   ),
-            onTap: (row) {
+            onTap: (row) async {
               final id = valueInt(row['id']);
               if (id != null) {
                 unawaited(portal.trackContentView(id));
-                unawaited(
-                  _showJsonDetail(
-                    context,
-                    title: valueText(row, const ['title']),
-                    fields: {
-                      'Dars yoki papka': valueText(row, const [
-                        'lesson_title',
-                        'folder_name',
-                      ], fallback: 'Material'),
-                      'Turi': valueText(row, const ['content_type']),
-                      'Hajmi': _fileSize(row['size_bytes']),
-                      'Versiya': '${row['version'] ?? 1}',
-                      'Holat': _statusLabel('${row['status']}'),
-                    },
-                  ),
+                final loaded = await _loadApiDetail(
+                  context,
+                  () => portal.loadContentDetail('files', id),
+                );
+                if (loaded == null || !context.mounted) return;
+                final detail = {...row, ...loaded};
+                await _showJsonDetail(
+                  context,
+                  title: valueText(detail, const ['title']),
+                  fields: {
+                    'Dars yoki papka': valueText(detail, const [
+                      'lesson_title',
+                      'folder_name',
+                    ], fallback: 'Material'),
+                    'Turi': valueText(detail, const ['content_type']),
+                    'Hajmi': _fileSize(detail['size_bytes']),
+                    'Versiya': '${detail['version'] ?? 1}',
+                    'Holat': _statusLabel('${detail['status']}'),
+                    'Yuklagan': valueText(detail, const ['uploaded_by_name']),
+                    'Ko‘rilgan': '${detail['view_count'] ?? 0}',
+                    'Yuklab olingan': '${detail['download_count'] ?? 0}',
+                    'Ustoz tasdig‘i': detail['is_approved_teacher'] == true
+                        ? _dateLabel(detail['approved_teacher_at'], time: true)
+                        : 'Tasdiqlanmagan',
+                    'Rahbar tasdig‘i': detail['is_approved_manager'] == true
+                        ? _dateLabel(detail['approved_manager_at'], time: true)
+                        : 'Tasdiqlanmagan',
+                    'Rad etish sababi': valueText(detail, const [
+                      'reject_reason',
+                    ]),
+                    'Yaratilgan': _dateLabel(detail['created_at'], time: true),
+                  },
+                  rawDetail: loaded,
                 );
               }
             },
@@ -2813,14 +4372,93 @@ class _ContentPortalPageState extends State<_ContentPortalPage> {
       children: [
         if (portal.libraries.isNotEmpty) ...[
           _SectionCard(
-            child: Wrap(
-              spacing: 7,
-              runSpacing: 7,
+            child: Column(
               children: [
                 for (final library in portal.libraries)
-                  _CatalogPill(
-                    icon: Icons.local_library_outlined,
-                    label: valueText(library, const ['name', 'title']),
+                  ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.local_library_outlined),
+                    title: Text(valueText(library, const ['name', 'title'])),
+                    subtitle: Text(
+                      '${valueText(library, const ['visibility'])} · ${valueText(library, const ['cohort_name', 'department_name'], fallback: 'Markaz kutubxonasi')}',
+                    ),
+                    trailing: _StatusPill(
+                      library['is_active'] == true ? 'Faol' : 'Yopilgan',
+                      positive: library['is_active'] == true,
+                    ),
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          valueText(library, const [
+                            'description',
+                          ], fallback: 'Kutubxona tavsifi berilmagan.'),
+                        ),
+                      ),
+                      if (library['allowed_roles'] is List)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              'Ruxsat etilgan rollar: ${_readable(library['allowed_roles'])}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                        ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: valueInt(library['id']) == null
+                              ? null
+                              : () async {
+                                  final id = valueInt(library['id'])!;
+                                  final loaded = await _loadApiDetail(
+                                    context,
+                                    () => portal.loadContentDetail(
+                                      'libraries',
+                                      id,
+                                    ),
+                                  );
+                                  if (loaded == null || !context.mounted) {
+                                    return;
+                                  }
+                                  final detail = {...library, ...loaded};
+                                  await _showJsonDetail(
+                                    context,
+                                    title: valueText(detail, const [
+                                      'name',
+                                      'title',
+                                    ]),
+                                    fields: {
+                                      'Tavsif': valueText(detail, const [
+                                        'description',
+                                      ]),
+                                      'Ko‘rinish': valueText(detail, const [
+                                        'visibility',
+                                      ]),
+                                      'Guruh yoki bo‘lim': valueText(
+                                        detail,
+                                        const [
+                                          'cohort_name',
+                                          'department_name',
+                                        ],
+                                      ),
+                                      'Ruxsat etilgan rollar': _readable(
+                                        detail['allowed_roles'],
+                                      ),
+                                      'Holat': detail['is_active'] == true
+                                          ? 'Faol'
+                                          : 'Yopilgan',
+                                    },
+                                    rawDetail: loaded,
+                                  );
+                                },
+                          icon: const Icon(Icons.info_outline_rounded),
+                          label: const Text('To‘liq tafsilotlar'),
+                        ),
+                      ),
+                    ],
                   ),
               ],
             ),
@@ -2859,18 +4497,29 @@ class _ContentPortalPageState extends State<_ContentPortalPage> {
             title: (row) => valueText(row, const ['title']),
             subtitle: (row) =>
                 '${valueText(row, const ['library_name'])} · ${valueText(row, const ['subject_name'])}',
-            onTap: (course) {
+            onTap: (course) async {
               final courseId = valueInt(course['id']);
+              if (courseId == null) return;
+              final loaded = await _loadApiDetail(
+                context,
+                () => portal.loadContentDetail('courses', courseId),
+              );
+              if (loaded == null || !context.mounted) return;
               final modules = portal.modules
                   .where((item) => valueInt(item['course']) == courseId)
                   .toList();
-              showModalBottomSheet<void>(
+              await showModalBottomSheet<void>(
                 context: context,
                 isScrollControlled: true,
-                builder: (_) => _CourseSheet(
-                  course: course,
-                  modules: modules,
-                  lessons: portal.contentLessons,
+                useSafeArea: true,
+                builder: (_) => PortalScope(
+                  controller: portal,
+                  child: _CourseSheet(
+                    portal: portal,
+                    course: {...course, ...loaded},
+                    modules: modules,
+                    lessons: portal.contentLessons,
+                  ),
                 ),
               );
             },
@@ -2882,11 +4531,13 @@ class _ContentPortalPageState extends State<_ContentPortalPage> {
 
 class _CourseSheet extends StatelessWidget {
   const _CourseSheet({
+    required this.portal,
     required this.course,
     required this.modules,
     required this.lessons,
   });
 
+  final PortalController portal;
   final Map<String, Object?> course;
   final List<Map<String, Object?>> modules;
   final List<Map<String, Object?>> lessons;
@@ -2919,6 +4570,38 @@ class _CourseSheet extends StatelessWidget {
               ExpansionTile(
                 title: Text(valueText(module, const ['title'])),
                 children: [
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: valueInt(module['id']) == null
+                          ? null
+                          : () async {
+                              final id = valueInt(module['id'])!;
+                              final loaded = await _loadApiDetail(
+                                context,
+                                () => portal.loadContentDetail('modules', id),
+                              );
+                              if (loaded == null || !context.mounted) return;
+                              final detail = {...module, ...loaded};
+                              await _showJsonDetail(
+                                context,
+                                title: valueText(detail, const ['title']),
+                                fields: {
+                                  'Tavsif': valueText(detail, const [
+                                    'description',
+                                  ]),
+                                  'Tartib': '${detail['order'] ?? '—'}',
+                                  'Kurs': valueText(detail, const [
+                                    'course_name',
+                                  ]),
+                                },
+                                rawDetail: loaded,
+                              );
+                            },
+                      icon: const Icon(Icons.info_outline_rounded),
+                      label: const Text('Modul tafsilotlari'),
+                    ),
+                  ),
                   for (final lesson in lessons.where(
                     (item) =>
                         valueInt(item['module']) == valueInt(module['id']),
@@ -2929,6 +4612,34 @@ class _CourseSheet extends StatelessWidget {
                       subtitle: Text(
                         valueText(lesson, const ['description'], fallback: ''),
                       ),
+                      onTap: valueInt(lesson['id']) == null
+                          ? null
+                          : () async {
+                              final id = valueInt(lesson['id'])!;
+                              final loaded = await _loadApiDetail(
+                                context,
+                                () => portal.loadContentDetail('lessons', id),
+                              );
+                              if (loaded == null || !context.mounted) return;
+                              final detail = {...lesson, ...loaded};
+                              await _showJsonDetail(
+                                context,
+                                title: valueText(detail, const ['title']),
+                                fields: {
+                                  'Tavsif': valueText(detail, const [
+                                    'description',
+                                  ]),
+                                  'Modul': valueText(detail, const [
+                                    'module_name',
+                                  ]),
+                                  'Tartib': '${detail['order'] ?? '—'}',
+                                  'Davomiylik': valueText(detail, const [
+                                    'duration_minutes',
+                                  ]),
+                                },
+                                rawDetail: loaded,
+                              );
+                            },
                     ),
                 ],
               ),
@@ -2972,132 +4683,580 @@ String _readable(Object? value) {
   return text.isEmpty ? '—' : text;
 }
 
+String _gradeComponentsLabel(Object? value) {
+  final components = valueRows(value);
+  if (components.isEmpty) return _readable(value);
+  return components
+      .map((component) {
+        final title = valueText(component, const [
+          'title',
+          'exam_title',
+        ], fallback: 'Nazorat');
+        final score = valueText(component, const ['score', 'value']);
+        final maxScore = valueText(component, const ['max_score']);
+        final weight = valueText(component, const ['weight']);
+        return '$title: $score${maxScore == '—' ? '' : ' / $maxScore'}${weight == '—' ? '' : ' · vazn $weight'}';
+      })
+      .join('\n');
+}
+
+String _invoiceLinesLabel(BuildContext context, Object? value) {
+  final lines = valueRows(value);
+  if (lines.isEmpty) return '—';
+  return lines
+      .map((line) {
+        final description = valueText(line, const ['description']);
+        final quantity = valueText(line, const ['quantity']);
+        final unit = _money(context, line['unit_price_uzs']);
+        final amount = _money(context, line['amount_uzs']);
+        return '$description · $quantity × $unit = $amount';
+      })
+      .join('\n');
+}
+
 Future<void> _showJsonDetail(
   BuildContext context, {
   required String title,
   required Map<String, String> fields,
-}) => showDialog<void>(
-  context: context,
-  builder: (context) => AlertDialog(
-    title: Text(title),
-    content: SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final field in fields.entries) ...[
-            Text(field.key, style: Theme.of(context).textTheme.labelMedium),
-            const SizedBox(height: 3),
-            Text(field.value),
-            const SizedBox(height: 14),
-          ],
-        ],
+  Map<String, Object?>? rawDetail,
+}) {
+  final portal = PortalScope.read(context);
+  return Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      builder: (_) => PortalScope(
+        controller: portal,
+        child: _RecordDetailScreen(title: title, fields: fields),
       ),
     ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Yopish'),
-      ),
-    ],
-  ),
-);
+  );
+}
 
-class _AiPortalPage extends StatelessWidget {
-  const _AiPortalPage();
+class _RecordDetailScreen extends StatelessWidget {
+  const _RecordDetailScreen({required this.title, required this.fields});
+
+  final String title;
+  final Map<String, String> fields;
 
   @override
   Widget build(BuildContext context) {
-    final portal = PortalScope.of(context);
-    final budget = portal.aiBudget;
-    final usage = portal.aiUsage;
-    final requests = portal.aiRequests;
-    final totalRequests =
-        valueInt(
-          usage['total_requests'] ??
-              usage['request_count'] ??
-              usage['requests'],
-        ) ??
-        requests.length;
-    final totalTokens =
-        valueInt(
-          usage['total_tokens'] ?? usage['tokens'] ?? usage['token_count'],
-        ) ??
-        0;
-    final remaining =
-        budget['remaining'] ??
-        budget['remaining_budget'] ??
-        budget['available'] ??
-        budget['balance'];
-    final spent =
-        budget['spent'] ??
-        budget['used'] ??
-        usage['total_cost'] ??
-        usage['cost'];
-    return _PortalPage(
-      title: portal.isParent ? 'AI nazorat tahlili' : 'AI o‘qish yordamchisi',
-      subtitle: portal.isParent
-          ? 'Server qayd etgan AI so‘rovlari va foydalanish holati.'
-          : 'O‘qish jarayonida bajarilgan AI so‘rovlari va ularning holati.',
-      section: PortalSection.ai,
-      trailing: const _LiveBadge(
-        label: 'SERVER AI',
-        icon: Icons.auto_awesome_rounded,
-      ),
-      children: [
-        _AiInsightCard(parent: portal.isParent, requests: requests),
-        const SizedBox(height: 12),
-        _ResponsiveGrid(
-          minWidth: 170,
-          children: [
-            _MetricCard(
-              label: 'AI so‘rovlari',
-              value: '$totalRequests',
-              icon: Icons.chat_bubble_outline_rounded,
+    final colors = Theme.of(context).colorScheme;
+    return Scaffold(
+      key: const ValueKey('record-detail-page'),
+      backgroundColor: colors.surfaceContainerLowest,
+      appBar: AppBar(title: Text(title)),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 32),
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        colors.primaryContainer,
+                        colors.secondaryContainer,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 25,
+                        backgroundColor: colors.surface,
+                        foregroundColor: colors.primary,
+                        child: const Icon(Icons.description_outlined),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                for (final field in fields.entries)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 9),
+                    child: Material(
+                      color: colors.surface,
+                      borderRadius: BorderRadius.circular(18),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              field.key,
+                              style: Theme.of(context).textTheme.labelMedium
+                                  ?.copyWith(color: colors.onSurfaceVariant),
+                            ),
+                            const SizedBox(height: 5),
+                            SelectableText(
+                              field.value,
+                              style: Theme.of(context).textTheme.bodyLarge,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-            _MetricCard(
-              label: 'Tokenlar',
-              value: totalTokens == 0 ? '—' : '$totalTokens',
-              icon: Icons.data_usage_rounded,
-            ),
-            _MetricCard(
-              label: 'Qolgan limit',
-              value: remaining == null ? '—' : '$remaining',
-              icon: Icons.speed_rounded,
-            ),
-            _MetricCard(
-              label: 'Sarflangan',
-              value: spent == null ? '—' : '$spent',
-              icon: Icons.payments_outlined,
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _SectionCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _DensePanelHeader(
-                title: 'So‘rovlar tarixi',
-                meta: '${requests.length} ta yozuv',
-                icon: Icons.history_rounded,
-              ),
-              const SizedBox(height: 10),
-              if (requests.isEmpty)
-                const _CompactEmpty(
-                  message: 'Serverda AI so‘rovlari hali qayd etilmagan.',
-                )
-              else
-                for (final request in requests.take(30))
-                  _AiRequestTile(request: request),
-            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
 
+Future<Map<String, Object?>?> _loadApiDetail(
+  BuildContext context,
+  Future<Map<String, Object?>> Function() loader,
+) async {
+  try {
+    return await loader();
+  } on Object catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_errorText(error))));
+    }
+    return null;
+  }
+}
+
+class _AiPortalPage extends StatefulWidget {
+  const _AiPortalPage();
+
+  @override
+  State<_AiPortalPage> createState() => _AiPortalPageState();
+}
+
+class _AiPortalPageState extends State<_AiPortalPage> {
+  final _message = TextEditingController();
+
+  @override
+  void dispose() {
+    _message.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send([String? preset]) async {
+    final text = (preset ?? _message.text).trim();
+    if (text.isEmpty) return;
+    _message.clear();
+    await PortalScope.read(context).askFamilyAssistant(text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final portal = PortalScope.of(context);
+    final colors = Theme.of(context).colorScheme;
+    final history = portal.aiConversation;
+    final visibleHistory = history.length > 12
+        ? history.sublist(history.length - 12)
+        : history;
+    return _PortalPage(
+      title: portal.isParent
+          ? 'Oila uchun AI yordamchi'
+          : 'AI o‘qish yordamchisi',
+      subtitle: portal.isParent
+          ? 'Farzandingizning baholari, davomati va vazifalari asosida tushunarli javoblar.'
+          : 'Kabinetdagi haqiqiy ma’lumotlar asosida reja, tahlil va o‘qish bo‘yicha yordam.',
+      section: PortalSection.ai,
+      trailing: _LiveBadge(
+        label: portal.aiServiceAvailable
+            ? (portal.aiFallbackMode ? 'SERVER REJIMI' : 'SERVER AI')
+            : 'ULANMAGAN',
+        icon: portal.aiServiceAvailable
+            ? Icons.auto_awesome_rounded
+            : Icons.cloud_off_rounded,
+      ),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(colors: [Sf.aiBg1, Sf.aiBg2]),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Sf.aiBorder),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Sf.ai.withValues(alpha: 0.13),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.auto_awesome_rounded, color: Sf.ai),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      portal.isParent
+                          ? 'Farzandingiz holatini birga tushunamiz'
+                          : 'O‘qishni aniq reja bilan davom ettiring',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: Sf.ai,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      portal.aiServiceAvailable
+                          ? 'Javoblar faqat siz ko‘rishga ruxsatli bo‘lgan kabinet ma’lumotlariga tayangan holda beriladi.'
+                          : 'AI markaz serveriga ulanmaguncha savollarga javob bera olmaydi.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Sf.accentInk,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (portal.aiServiceAvailable && portal.aiSuggestions.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final suggestion in portal.aiSuggestions)
+                ActionChip(
+                  avatar: const Icon(Icons.bolt_rounded, size: 17),
+                  label: Text(suggestion),
+                  onPressed: portal.aiReplyBusy
+                      ? null
+                      : () => _send(suggestion),
+                ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 14),
+        if (!portal.aiServiceAvailable) ...[
+          _SectionCard(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: colors.errorContainer,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Icon(Icons.cloud_off_rounded, color: colors.error),
+                ),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'AI yordamchi ulanmagan',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'AI yordamchi hali markaz tomonidan ulanmagan. Hozircha bu funksiya ishlamaydi.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: colors.onSurfaceVariant,
+                          height: 1.45,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (history.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => _openHistory(context, history),
+              icon: const Icon(Icons.history_rounded),
+              label: const Text('Oldingi suhbatlarni ko‘rish'),
+            ),
+          ],
+        ] else
+          _SectionCard(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _DensePanelHeader(
+                        title: 'Yordamchi bilan suhbat',
+                        meta: '${history.length} ta xabar',
+                        icon: Icons.forum_outlined,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      key: const ValueKey('family-ai-history'),
+                      onPressed: history.isEmpty
+                          ? null
+                          : () => _openHistory(context, history),
+                      icon: const Icon(Icons.history_rounded, size: 18),
+                      label: const Text('Tarix'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                if (history.isEmpty && !portal.aiReplyBusy)
+                  const _CompactEmpty(
+                    message:
+                        'Savol yozing yoki yuqoridagi tayyor savollardan birini tanlang.',
+                  )
+                else ...[
+                  if (history.length > visibleHistory.length)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Center(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _openHistory(context, history),
+                          icon: const Icon(Icons.history_rounded, size: 17),
+                          label: Text(
+                            '${history.length - visibleHistory.length} ta oldingi xabar',
+                          ),
+                        ),
+                      ),
+                    ),
+                  for (final item in visibleHistory)
+                    _FamilyAiBubble(message: item),
+                ],
+                if (portal.aiReplyBusy) const _FamilyAiThinking(),
+                if (portal.aiReplyError case final error?) ...[
+                  const SizedBox(height: 6),
+                  _InlineMessage(text: error, error: true),
+                ],
+                if (portal.aiSources.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final source in portal.aiSources)
+                        Chip(
+                          visualDensity: VisualDensity.compact,
+                          avatar: const Icon(Icons.verified_outlined, size: 16),
+                          label: Text(
+                            valueText(source, const [
+                              'label',
+                            ], fallback: 'Kabinet'),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        key: const ValueKey('family-ai-input'),
+                        controller: _message,
+                        minLines: 1,
+                        maxLines: 5,
+                        textInputAction: TextInputAction.newline,
+                        decoration: const InputDecoration(
+                          hintText: 'Savolingizni yozing…',
+                          prefixIcon: Icon(Icons.auto_awesome_outlined),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox.square(
+                      dimension: 50,
+                      child: FilledButton(
+                        key: const ValueKey('family-ai-send'),
+                        style: FilledButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          backgroundColor: Sf.ai,
+                          foregroundColor: colors.surface,
+                        ),
+                        onPressed: portal.aiReplyBusy ? null : _send,
+                        child: portal.aiReplyBusy
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.arrow_upward_rounded),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _openHistory(BuildContext context, List<Map<String, Object?>> history) {
+    final portal = PortalScope.read(context);
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PortalScope(
+          controller: portal,
+          child: _AiHistoryScreen(history: List.of(history)),
+        ),
+      ),
+    );
+  }
+}
+
+class _AiHistoryScreen extends StatelessWidget {
+  const _AiHistoryScreen({required this.history});
+
+  final List<Map<String, Object?>> history;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = [...history]
+      ..sort(
+        (left, right) =>
+            '${left['created_at']}'.compareTo('${right['created_at']}'),
+      );
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          _familyCopy(
+            context,
+            uz: 'AI suhbat tarixi',
+            ru: 'История чата с AI',
+            en: 'AI chat history',
+          ),
+        ),
+      ),
+      body: rows.isEmpty
+          ? _EmptyState(
+              icon: Icons.history_toggle_off_rounded,
+              title: _familyCopy(
+                context,
+                uz: 'Suhbat tarixi yo‘q',
+                ru: 'Истории чата пока нет',
+                en: 'No chat history yet',
+              ),
+              message: _familyCopy(
+                context,
+                uz: 'AI bilan yozishmalar paydo bo‘lganda shu yerda saqlanadi.',
+                ru: 'Переписка с AI появится здесь после первого диалога.',
+                en: 'Your AI conversations will appear here after the first chat.',
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+              itemCount: rows.length,
+              itemBuilder: (context, index) {
+                final item = rows[index];
+                final day = _dateLabel(item['created_at']);
+                final previousDay = index == 0
+                    ? null
+                    : _dateLabel(rows[index - 1]['created_at']);
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (day != previousDay)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(0, 8, 0, 12),
+                        child: Center(
+                          child: Chip(
+                            avatar: const Icon(
+                              Icons.calendar_today_outlined,
+                              size: 15,
+                            ),
+                            label: Text(day),
+                          ),
+                        ),
+                      ),
+                    _FamilyAiBubble(message: item),
+                  ],
+                );
+              },
+            ),
+    );
+  }
+}
+
+class _FamilyAiBubble extends StatelessWidget {
+  const _FamilyAiBubble({required this.message});
+
+  final Map<String, Object?> message;
+
+  @override
+  Widget build(BuildContext context) {
+    final user =
+        valueText(message, const ['role'], fallback: 'assistant') == 'user';
+    final colors = Theme.of(context).colorScheme;
+    return Align(
+      alignment: user ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 720),
+        margin: const EdgeInsets.only(bottom: 9),
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+        decoration: BoxDecoration(
+          color: user ? colors.primary : colors.surfaceContainerLow,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(15),
+            topRight: const Radius.circular(15),
+            bottomLeft: Radius.circular(user ? 15 : 4),
+            bottomRight: Radius.circular(user ? 4 : 15),
+          ),
+          border: user ? null : Border.all(color: colors.outlineVariant),
+        ),
+        child: Text(
+          valueText(message, const ['content', 'answer'], fallback: '—'),
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: user ? colors.onPrimary : colors.onSurface,
+            height: 1.5,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FamilyAiThinking extends StatelessWidget {
+  const _FamilyAiThinking();
+
+  @override
+  Widget build(BuildContext context) => const Align(
+    alignment: Alignment.centerLeft,
+    child: Padding(
+      padding: EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+      child: SizedBox(
+        width: 24,
+        height: 24,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      ),
+    ),
+  );
+}
+
+// Legacy request-ledger widgets remain for older golden references, while the
+// active family route uses the conversation UI above.
+// ignore: unused_element
 class _AiInsightCard extends StatelessWidget {
   const _AiInsightCard({required this.parent, required this.requests});
 
@@ -3176,6 +5335,7 @@ class _AiInsightCard extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _AiRequestTile extends StatelessWidget {
   const _AiRequestTile({required this.request});
 
@@ -3271,17 +5431,105 @@ class _RebuiltMessagesPortalPage extends StatefulWidget {
       _RebuiltMessagesPortalPageState();
 }
 
-class _RebuiltMessagesPortalPageState
-    extends State<_RebuiltMessagesPortalPage> {
+class _RebuiltMessagesPortalPageState extends State<_RebuiltMessagesPortalPage>
+    with WidgetsBindingObserver {
   final _search = TextEditingController();
   String _filter = 'all';
   int? _selectedThreadId;
   bool _refreshing = false;
+  bool _checkingContacts = false;
+  bool _polling = false;
+  bool _appActive = true;
+  String? _contactsIssue;
+  Timer? _pollTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _PortalCommunicationRouter.pendingThreadId.addListener(
+      _consumePendingThread,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_checkContacts());
+      unawaited(_primePreviews(PortalScope.read(context)));
+      _consumePendingThread();
+      _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+        final visible =
+            mounted &&
+            _appActive &&
+            (ModalRoute.of(context)?.isCurrent ?? true) &&
+            TickerMode.valuesOf(context).enabled;
+        if (visible && !_refreshing && !_polling) {
+          _polling = true;
+          unawaited(
+            _refreshThreads(
+              PortalScope.read(context),
+              quiet: true,
+            ).whenComplete(() => _polling = false),
+          );
+        }
+      });
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appActive = state == AppLifecycleState.resumed;
+  }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _PortalCommunicationRouter.pendingThreadId.removeListener(
+      _consumePendingThread,
+    );
     _search.dispose();
     super.dispose();
+  }
+
+  void _consumePendingThread() {
+    if (!mounted) return;
+    final id = _PortalCommunicationRouter.takeThread();
+    if (id == null) return;
+    final portal = PortalScope.read(context);
+    unawaited(
+      portal.fetchThreadDetail(id).catchError((_) => const <String, Object?>{}),
+    );
+    if (MediaQuery.sizeOf(context).width >= 1100) {
+      setState(() => _selectedThreadId = id);
+    } else {
+      _openMobileThread(portal, id);
+    }
+  }
+
+  Future<void> _checkContacts() async {
+    if (_checkingContacts) return;
+    final portal = PortalScope.read(context);
+    setState(() {
+      _checkingContacts = true;
+      _contactsIssue = null;
+    });
+    try {
+      await portal.searchMessagingContacts();
+    } on Object catch (error) {
+      if (mounted) setState(() => _contactsIssue = _errorText(error));
+    } finally {
+      if (mounted) setState(() => _checkingContacts = false);
+    }
+  }
+
+  Future<void> _primePreviews(PortalController portal) async {
+    final ids = portal.threads
+        .map((thread) => valueInt(thread['id']))
+        .whereType<int>()
+        .take(10);
+    await Future.wait([
+      for (final id in ids)
+        portal.ensureLatestMessagePage(id).catchError((_) {}),
+    ]);
   }
 
   @override
@@ -3323,6 +5571,14 @@ class _RebuiltMessagesPortalPageState
           label: const Text('Yangi'),
         ),
         children: [
+          if (_contactsIssue != null || portal.contacts.isEmpty) ...[
+            _ChatDirectoryNotice(
+              loading: _checkingContacts,
+              error: _contactsIssue,
+              onRetry: _checkContacts,
+            ),
+            const SizedBox(height: 10),
+          ],
           _SectionCard(
             padding: EdgeInsets.zero,
             child: SizedBox(
@@ -3357,6 +5613,14 @@ class _RebuiltMessagesPortalPageState
                 ? null
                 : () => _startConversation(portal),
           ),
+          if (_contactsIssue != null || portal.contacts.isEmpty) ...[
+            const SizedBox(height: 8),
+            _ChatDirectoryNotice(
+              loading: _checkingContacts,
+              error: _contactsIssue,
+              onRetry: _checkContacts,
+            ),
+          ],
           const SizedBox(height: 12),
           Expanded(
             child: Container(
@@ -3407,10 +5671,14 @@ class _RebuiltMessagesPortalPageState
     );
   }
 
-  Future<void> _refreshThreads(PortalController portal) async {
-    setState(() => _refreshing = true);
+  Future<void> _refreshThreads(
+    PortalController portal, {
+    bool quiet = false,
+  }) async {
+    if (!quiet) setState(() => _refreshing = true);
     try {
       await portal.refresh(PortalSection.messages);
+      await _primePreviews(portal);
     } on Object catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -3418,7 +5686,7 @@ class _RebuiltMessagesPortalPageState
         ).showSnackBar(SnackBar(content: Text(_errorText(error))));
       }
     } finally {
-      if (mounted) setState(() => _refreshing = false);
+      if (mounted && !quiet) setState(() => _refreshing = false);
     }
   }
 
@@ -3441,6 +5709,10 @@ class _RebuiltMessagesPortalPageState
     final subject = TextEditingController();
     final body = TextEditingController();
     var contactQuery = '';
+    var contactRows = [...portal.contacts];
+    var searchingContacts = false;
+    String? contactSearchError;
+    Timer? contactDebounce;
     final accepted = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -3463,7 +5735,7 @@ class _RebuiltMessagesPortalPageState
                   children: [
                     Expanded(
                       child: Text(
-                        'Yangi suhbat',
+                        selected.length > 1 ? 'Yangi guruh' : 'Yangi suhbat',
                         style: Theme.of(context).textTheme.headlineSmall,
                       ),
                     ),
@@ -3483,14 +5755,69 @@ class _RebuiltMessagesPortalPageState
                 const SizedBox(height: 14),
                 TextField(
                   controller: contactSearch,
-                  onChanged: (value) => setSheetState(
-                    () => contactQuery = value.trim().toLowerCase(),
-                  ),
+                  onChanged: (value) {
+                    contactQuery = value.trim().toLowerCase();
+                    contactDebounce?.cancel();
+                    setSheetState(() {
+                      searchingContacts = contactQuery.isNotEmpty;
+                      contactSearchError = null;
+                    });
+                    contactDebounce = Timer(
+                      const Duration(milliseconds: 350),
+                      () async {
+                        try {
+                          final rows = await portal.searchMessagingContacts(
+                            search: contactQuery,
+                          );
+                          if (sheetContext.mounted) {
+                            setSheetState(() => contactRows = rows);
+                          }
+                        } on Object catch (error) {
+                          if (sheetContext.mounted) {
+                            setSheetState(
+                              () => contactSearchError = _errorText(error),
+                            );
+                          }
+                        } finally {
+                          if (sheetContext.mounted) {
+                            setSheetState(() => searchingContacts = false);
+                          }
+                        }
+                      },
+                    );
+                  },
                   decoration: const InputDecoration(
                     hintText: 'Kontaktni qidirish',
                     prefixIcon: Icon(Icons.search_rounded),
                   ),
                 ),
+                if (searchingContacts)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Row(
+                      children: [
+                        const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Kontaktlar qidirilmoqda…',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                if (contactSearchError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 7),
+                    child: Text(
+                      contactSearchError!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 10),
                 Flexible(
                   child: DecoratedBox(
@@ -3501,7 +5828,7 @@ class _RebuiltMessagesPortalPageState
                     child: ListView(
                       shrinkWrap: true,
                       children: [
-                        for (final contact in portal.contacts)
+                        for (final contact in contactRows)
                           if (contactQuery.isEmpty ||
                               '${contact['display_name']} ${contact['username']} ${contact['role_label']}'
                                   .toLowerCase()
@@ -3510,14 +5837,14 @@ class _RebuiltMessagesPortalPageState
                                 case final id?)
                               CheckboxListTile(
                                 value: selected.contains(id),
-                                secondary: CircleAvatar(
-                                  child: Text(
-                                    _initials(
-                                      valueText(contact, const [
-                                        'display_name',
-                                      ]),
-                                    ),
-                                  ),
+                                secondary: _ChatAvatar(
+                                  portal: portal,
+                                  contact: contact,
+                                  name: valueText(contact, const [
+                                    'display_name',
+                                    'username',
+                                  ]),
+                                  radius: 20,
                                 ),
                                 title: Text(
                                   valueText(contact, const [
@@ -3544,7 +5871,11 @@ class _RebuiltMessagesPortalPageState
                 TextField(
                   controller: subject,
                   onChanged: (_) => setSheetState(() {}),
-                  decoration: const InputDecoration(labelText: 'Mavzu'),
+                  decoration: InputDecoration(
+                    labelText: selected.length > 1
+                        ? 'Guruh nomi (majburiy)'
+                        : 'Mavzu',
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -3560,12 +5891,22 @@ class _RebuiltMessagesPortalPageState
                 FilledButton.icon(
                   onPressed:
                       selected.isEmpty ||
-                          (subject.text.trim().isEmpty &&
-                              body.text.trim().isEmpty)
+                          (selected.length > 1
+                              ? subject.text.trim().isEmpty
+                              : subject.text.trim().isEmpty &&
+                                    body.text.trim().isEmpty)
                       ? null
                       : () => Navigator.pop(sheetContext, true),
-                  icon: const Icon(Icons.arrow_forward_rounded),
-                  label: const Text('Suhbatni boshlash'),
+                  icon: Icon(
+                    selected.length > 1
+                        ? Icons.group_add_rounded
+                        : Icons.arrow_forward_rounded,
+                  ),
+                  label: Text(
+                    selected.length > 1
+                        ? 'Guruhni yaratish'
+                        : 'Suhbatni boshlash',
+                  ),
                 ),
               ],
             ),
@@ -3589,6 +5930,7 @@ class _RebuiltMessagesPortalPageState
         ).showSnackBar(SnackBar(content: Text(_errorText(error))));
       }
     } finally {
+      contactDebounce?.cancel();
       contactSearch.dispose();
       subject.dispose();
       body.dispose();
@@ -3937,6 +6279,9 @@ class _WorkspaceConversationTile extends StatelessWidget {
         : 0;
     final attachment = latestMessage?['attachments'];
     final hasAttachment = attachment is List && attachment.isNotEmpty;
+    final attachmentKey = hasAttachment
+        ? _messageAttachmentKey(attachment.first)
+        : '';
     final mine =
         valueInt(latestMessage?['sender']) == portal.messagingSelfUserId;
     final latestBody = valueText(latestMessage ?? const {}, const [
@@ -3948,9 +6293,7 @@ class _WorkspaceConversationTile extends StatelessWidget {
     final preview = latestBody.isNotEmpty
         ? latestBody
         : hasAttachment
-        ? _isAudioAttachment('${attachment.first}')
-              ? 'Ovozli xabar'
-              : 'Biriktirilgan fayl'
+        ? _attachmentPreviewLabel(attachmentKey)
         : subject;
     final time = _dateLabel(
       thread['last_message_at'] ?? thread['created_at'],
@@ -3994,34 +6337,12 @@ class _WorkspaceConversationTile extends StatelessWidget {
                 Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? colors.primary
-                            : colors.surfaceContainerHighest,
-                        shape: BoxShape.circle,
-                      ),
-                      child: participants > 2
-                          ? Icon(
-                              Icons.groups_2_rounded,
-                              color: selected
-                                  ? colors.onPrimary
-                                  : colors.onSurfaceVariant,
-                              size: 22,
-                            )
-                          : Text(
-                              _initials(title),
-                              style: TextStyle(
-                                color: selected
-                                    ? colors.onPrimary
-                                    : colors.onSurfaceVariant,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
+                    _ChatAvatar(
+                      portal: portal,
+                      contact: contact,
+                      name: title,
+                      radius: 24,
+                      group: participants > 2,
                     ),
                     if (online)
                       Positioned(
@@ -4099,9 +6420,7 @@ class _WorkspaceConversationTile extends StatelessWidget {
                           ],
                           if (hasAttachment) ...[
                             Icon(
-                              _isAudioAttachment('${attachment.first}')
-                                  ? Icons.mic_rounded
-                                  : Icons.attach_file_rounded,
+                              _attachmentIcon(attachmentKey),
                               size: 14,
                               color: colors.primary,
                             ),
@@ -4140,7 +6459,7 @@ class _WorkspaceConversationTile extends StatelessWidget {
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 9,
+                                  fontSize: 10.5,
                                   fontWeight: FontWeight.w900,
                                 ),
                               ),
@@ -5027,13 +7346,16 @@ class _ConversationTile extends StatelessWidget {
     final latestAttachments = latestMessage?['attachments'];
     final hasLatestAttachment =
         latestAttachments is List && latestAttachments.isNotEmpty;
+    final latestAttachmentKey = hasLatestAttachment
+        ? _messageAttachmentKey(latestAttachments.first)
+        : '';
     final subject = valueText(thread, const [
       'subject',
     ], fallback: participants > 2 ? 'Guruh suhbati' : 'Shaxsiy suhbat');
     final preview = latestBody.isNotEmpty
         ? latestBody
         : hasLatestAttachment
-        ? 'Biriktirilgan fayl'
+        ? _attachmentPreviewLabel(latestAttachmentKey)
         : subject;
     final mine = valueInt(latestMessage?['sender']) == selfUserId;
     final colors = Theme.of(context).colorScheme;
@@ -5163,9 +7485,7 @@ class _ConversationTile extends StatelessWidget {
                       ],
                       if (hasLatestAttachment) ...[
                         Icon(
-                          _isAudioAttachment('${latestAttachments.first}')
-                              ? Icons.mic_rounded
-                              : Icons.attach_file_rounded,
+                          _attachmentIcon(latestAttachmentKey),
                           size: 15,
                           color: colors.primary,
                         ),
@@ -5253,13 +7573,832 @@ Map<String, Object?> _threadContact(
       if (raw is! Map) continue;
       final id = valueInt(raw['user']);
       if (id == null || id == portal.messagingSelfUserId) continue;
-      return portal.contacts
-              .where((item) => valueInt(item['user_id'] ?? item['id']) == id)
-              .firstOrNull ??
-          const {};
+      return portal.messagingContactByUserId(id);
     }
   }
   return const {};
+}
+
+List<Map<String, Object?>> _threadContacts(
+  PortalController portal,
+  Map<String, Object?> thread,
+) {
+  final participants = thread['participants'];
+  if (participants is! List) return const [];
+  final contacts = <Map<String, Object?>>[];
+  for (final raw in participants) {
+    if (raw is! Map) continue;
+    final id = valueInt(raw['user']);
+    if (id == null || id == portal.messagingSelfUserId) continue;
+    final contact = portal.messagingContactByUserId(id);
+    contacts.add(
+      contact.isNotEmpty
+          ? contact
+          : <String, Object?>{
+              'id': id,
+              'user_id': id,
+              'display_name': 'Foydalanuvchi #$id',
+              'role_label': 'Suhbat ishtirokchisi',
+            },
+    );
+  }
+  return contacts;
+}
+
+String _chatAvatarValue(Map<String, Object?> contact) {
+  String from(Object? raw) {
+    if (raw is String) {
+      final value = raw.trim();
+      return value == 'null' ? '' : value;
+    }
+    if (raw is Map) {
+      for (final key in const [
+        'url',
+        'download_url',
+        'file_url',
+        'src',
+        'path',
+        'file',
+      ]) {
+        final value = from(raw[key]);
+        if (value.isNotEmpty) return value;
+      }
+    }
+    return '';
+  }
+
+  for (final key in const [
+    'avatar_url',
+    'photo_url',
+    'profile_photo_url',
+    'avatar',
+    'photo',
+    'profile_photo',
+    'picture',
+    'image_url',
+    'image',
+  ]) {
+    final value = from(contact[key]);
+    if (value.isNotEmpty) return value;
+  }
+  for (final key in const [
+    'profile',
+    'user',
+    'person',
+    'identity',
+    'contact',
+    'student',
+  ]) {
+    final nested = contact[key];
+    if (nested is Map) {
+      final value = _chatAvatarValue(Map<String, Object?>.from(nested));
+      if (value.isNotEmpty) return value;
+    }
+  }
+  return '';
+}
+
+String _resolvedChatAvatarUrl(PortalController portal, String raw) {
+  if (raw.isEmpty || raw.startsWith('data:')) return raw;
+  final parsed = Uri.tryParse(raw);
+  if (parsed != null && parsed.hasScheme) return raw;
+  final origin = Uri.parse(portal.baseUrl);
+  if (raw.startsWith('//')) return '${origin.scheme}:$raw';
+  final normalized = raw.startsWith('/') ? raw : '/$raw';
+  return origin.resolve(normalized).toString();
+}
+
+class _ChatAvatar extends StatelessWidget {
+  const _ChatAvatar({
+    required this.portal,
+    required this.contact,
+    required this.name,
+    this.radius = 22,
+    this.group = false,
+    this.onTap,
+  });
+
+  final PortalController portal;
+  final Map<String, Object?> contact;
+  final String name;
+  final double radius;
+  final bool group;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final userId = valueInt(contact['user_id'] ?? contact['id']);
+    final cached = userId == null
+        ? const <String, Object?>{}
+        : portal.messagingContactByUserId(userId);
+    final effective = {...contact, ...cached};
+    if (!group &&
+        _chatAvatarValue(effective).isEmpty &&
+        userId != null &&
+        effective['principal_kind'] == 'student' &&
+        effective['_profile_detail_attempted'] != true) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(
+          portal
+              .loadMessagingContactProfile(contact)
+              .catchError((_) => contact),
+        );
+      });
+    }
+    Widget fallback() => ColoredBox(
+      color: colors.primary,
+      child: Center(
+        child: group
+            ? Icon(
+                Icons.groups_2_rounded,
+                color: colors.onPrimary,
+                size: radius,
+              )
+            : Text(
+                _initials(name),
+                style: TextStyle(
+                  color: colors.onPrimary,
+                  fontSize: radius * .52,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+      ),
+    );
+
+    final raw = group ? '' : _chatAvatarValue(effective);
+    Widget image = fallback();
+    if (raw.startsWith('data:image/') && raw.contains(',')) {
+      try {
+        image = Image.memory(
+          base64Decode(raw.substring(raw.indexOf(',') + 1)),
+          width: radius * 2,
+          height: radius * 2,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          errorBuilder: (_, _, _) => fallback(),
+        );
+      } on FormatException {
+        image = fallback();
+      }
+    } else if (raw.isNotEmpty) {
+      image = Image.network(
+        _resolvedChatAvatarUrl(portal, raw),
+        width: radius * 2,
+        height: radius * 2,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        errorBuilder: (_, _, _) => fallback(),
+        loadingBuilder: (context, child, progress) =>
+            progress == null ? child : fallback(),
+      );
+    }
+    final avatar = Semantics(
+      image: true,
+      label: '$name avatar',
+      child: SizedBox.square(
+        dimension: radius * 2,
+        child: ClipOval(child: image),
+      ),
+    );
+    if (onTap == null) return avatar;
+    return InkWell(
+      customBorder: const CircleBorder(),
+      onTap: onTap,
+      child: avatar,
+    );
+  }
+}
+
+Future<void> _openChatContactProfile(
+  BuildContext context,
+  PortalController portal,
+  Map<String, Object?> contact, {
+  Map<String, Object?> thread = const {},
+}) => Navigator.of(context).push<void>(
+  MaterialPageRoute<void>(
+    builder: (_) => PortalScope(
+      controller: portal,
+      child: _ChatContactProfilePage(
+        portal: portal,
+        initial: contact,
+        thread: thread,
+      ),
+    ),
+  ),
+);
+
+Future<void> _openThreadInfo(
+  BuildContext context,
+  PortalController portal,
+  Map<String, Object?> thread,
+) {
+  final contacts = _threadContacts(portal, thread);
+  if (contacts.length == 1) {
+    return _openChatContactProfile(
+      context,
+      portal,
+      contacts.first,
+      thread: thread,
+    );
+  }
+  return Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      builder: (_) => PortalScope(
+        controller: portal,
+        child: _ChatGroupInfoPage(
+          portal: portal,
+          thread: thread,
+          contacts: contacts,
+        ),
+      ),
+    ),
+  );
+}
+
+class _ChatContactProfilePage extends StatefulWidget {
+  const _ChatContactProfilePage({
+    required this.portal,
+    required this.initial,
+    this.thread = const {},
+  });
+
+  final PortalController portal;
+  final Map<String, Object?> initial;
+  final Map<String, Object?> thread;
+
+  @override
+  State<_ChatContactProfilePage> createState() =>
+      _ChatContactProfilePageState();
+}
+
+class _ChatContactProfilePageState extends State<_ChatContactProfilePage> {
+  late final Future<Map<String, Object?>> _profile;
+
+  @override
+  void initState() {
+    super.initState();
+    _profile = widget.portal.loadMessagingContactProfile(
+      widget.initial,
+      force: true,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Map<String, Object?>>(
+    future: _profile,
+    initialData: widget.initial,
+    builder: (context, snapshot) {
+      final portal = PortalScope.of(context);
+      final snapshotContact = snapshot.data ?? widget.initial;
+      final userId = valueInt(
+        snapshotContact['user_id'] ?? snapshotContact['id'],
+      );
+      final cached = portal.messagingContactByUserId(userId);
+      final contact = cached.isEmpty
+          ? snapshotContact
+          : {...snapshotContact, ...cached};
+      final name = valueText(contact, const [
+        'display_name',
+        'full_name',
+        'username',
+      ], fallback: 'Suhbat ishtirokchisi');
+      String t(String uz, String ru, String en) =>
+          switch (portal.preferences.language) {
+            PortalLanguage.uz => uz,
+            PortalLanguage.ru => ru,
+            PortalLanguage.en => en,
+          };
+      String value(List<String> keys) {
+        for (final key in keys) {
+          final raw = contact[key];
+          if (raw is List) {
+            final parts = raw
+                .map(
+                  (item) => item is Map
+                      ? valueText(Map<String, Object?>.from(item), const [
+                          'name',
+                          'title',
+                          'label',
+                        ])
+                      : '$item'.trim(),
+                )
+                .where((item) => item.isNotEmpty && item != 'null')
+                .toList(growable: false);
+            if (parts.isNotEmpty) return parts.join(', ');
+          }
+          final text = '${raw ?? ''}'.trim();
+          if (text.isNotEmpty && text != 'null') return text;
+        }
+        return '';
+      }
+
+      (IconData, String, String)? row(
+        IconData icon,
+        String label,
+        List<String> keys, {
+        bool date = false,
+      }) {
+        final raw = value(keys);
+        if (raw.isEmpty) return null;
+        return (icon, label, date ? _dateLabel(raw) : raw);
+      }
+
+      final role = value(const ['role_label', 'role_slug']);
+      final phone = value(const ['phone']);
+      final email = value(const ['email']);
+      final genderRaw = value(const ['gender']).toLowerCase();
+      final gender = switch (genderRaw) {
+        'm' || 'male' => t('Erkak', 'Мужской', 'Male'),
+        'f' || 'female' => t('Ayol', 'Женский', 'Female'),
+        _ => '',
+      };
+      final profileId = valueInt(contact['profile_id']);
+      final matchingLessons =
+          portal.lessons.where((lesson) {
+            if (contact['principal_kind'] != 'teacher') return false;
+            final teacherId = valueInt(
+              lesson['teacher'] ?? lesson['teacher_id'],
+            );
+            if (profileId != null && teacherId == profileId) return true;
+            final teacherName = valueText(lesson, const [
+              'teacher_name',
+            ], fallback: '').trim().toLowerCase();
+            return teacherName.isNotEmpty &&
+                teacherName == name.trim().toLowerCase();
+          }).toList()..sort(
+            (left, right) =>
+                '${left['starts_at']}'.compareTo('${right['starts_at']}'),
+          );
+      final nextLesson = matchingLessons
+          .where(
+            (lesson) =>
+                DateTime.tryParse(
+                  '${lesson['starts_at'] ?? ''}',
+                )?.isAfter(DateTime.now()) ==
+                true,
+          )
+          .firstOrNull;
+      final threadId = valueInt(widget.thread['id']);
+      final chatMessages = threadId == null
+          ? const <Map<String, Object?>>[]
+          : portal.messages[threadId] ?? const <Map<String, Object?>>[];
+      final attachmentKeys = <String>[
+        for (final message in chatMessages)
+          if (message['attachments'] is List)
+            for (final attachment in message['attachments'] as List)
+              if (_messageAttachmentKey(attachment).isNotEmpty)
+                _messageAttachmentKey(attachment),
+      ];
+      final voiceCount = attachmentKeys.where(_isAudioAttachment).length;
+      final mediaCount = attachmentKeys
+          .where((key) => _isImageAttachment(key) || _isVideoAttachment(key))
+          .length;
+      final accountRows = <(IconData, String, String)>[
+        if (role.isNotEmpty)
+          (Icons.badge_outlined, t('Lavozim', 'Роль', 'Role'), role),
+        ?row(
+          Icons.alternate_email_rounded,
+          t('Login', 'Логин', 'Username'),
+          const ['username'],
+        ),
+        ?row(
+          Icons.confirmation_number_outlined,
+          t('O‘quvchi ID', 'ID ученика', 'Student ID'),
+          const ['student_id'],
+        ),
+        ?row(Icons.verified_outlined, t('Holat', 'Статус', 'Status'), const [
+          'status',
+        ]),
+      ];
+      final contactRows = <(IconData, String, String)>[
+        ?row(Icons.phone_outlined, t('Telefon', 'Телефон', 'Phone'), const [
+          'phone',
+        ]),
+        ?row(Icons.mail_outline_rounded, 'Email', const ['email']),
+        ?row(
+          Icons.location_on_outlined,
+          t('Manzil', 'Местоположение', 'Location'),
+          const ['location'],
+        ),
+      ];
+      final educationRows = <(IconData, String, String)>[
+        ?row(Icons.apartment_rounded, t('Filial', 'Филиал', 'Branch'), const [
+          'branch_name',
+        ]),
+        ?row(Icons.groups_2_outlined, t('Guruh', 'Группа', 'Group'), const [
+          'current_cohort_name',
+          'cohort_name',
+        ]),
+        ?row(Icons.school_outlined, t('Bo‘lim', 'Отдел', 'Department'), const [
+          'department_name',
+        ]),
+        ?row(Icons.trending_up_rounded, t('Daraja', 'Уровень', 'Level'), const [
+          'academic_level',
+        ]),
+        ?row(
+          Icons.menu_book_outlined,
+          t('Fanlar', 'Предметы', 'Subjects'),
+          const ['subjects'],
+        ),
+        ?row(
+          Icons.workspace_premium_outlined,
+          t('Malaka', 'Квалификация', 'Qualifications'),
+          const ['qualifications'],
+        ),
+        ?row(
+          Icons.business_center_outlined,
+          t('Ish joyi', 'Место работы', 'Workplace'),
+          const ['workplace'],
+        ),
+        ?row(
+          Icons.event_available_outlined,
+          t('Qabul sanasi', 'Дата зачисления', 'Enrollment date'),
+          const ['enrollment_date', 'hire_date'],
+          date: true,
+        ),
+        if (nextLesson != null)
+          (
+            Icons.upcoming_outlined,
+            t('Keyingi dars', 'Следующий урок', 'Next lesson'),
+            '${valueText(nextLesson, const ['title'], fallback: t('Dars', 'Урок', 'Lesson'))} · ${_dateLabel(nextLesson['starts_at'], time: true)}',
+          ),
+      ];
+      final personalRows = <(IconData, String, String)>[
+        if (gender.isNotEmpty)
+          (Icons.person_outline_rounded, t('Jins', 'Пол', 'Gender'), gender),
+        ?row(
+          Icons.cake_outlined,
+          t('Tug‘ilgan sana', 'Дата рождения', 'Birth date'),
+          const ['birthdate'],
+          date: true,
+        ),
+        ?row(
+          Icons.calendar_month_outlined,
+          t('Profil yaratilgan', 'Профиль создан', 'Profile created'),
+          const ['created_at', 'date_joined'],
+          date: true,
+        ),
+      ];
+      final chatRows = <(IconData, String, String)>[
+        if (threadId != null)
+          (
+            Icons.chat_bubble_outline_rounded,
+            t('Xabarlar', 'Сообщения', 'Messages'),
+            '${chatMessages.length}',
+          ),
+        if (threadId != null)
+          (
+            Icons.perm_media_outlined,
+            t('Media', 'Медиа', 'Media'),
+            '$mediaCount',
+          ),
+        if (threadId != null)
+          (
+            Icons.graphic_eq_rounded,
+            t('Ovozli xabarlar', 'Голосовые сообщения', 'Voice messages'),
+            '$voiceCount',
+          ),
+        if (threadId != null)
+          (
+            Icons.attach_file_rounded,
+            t('Barcha fayllar', 'Все файлы', 'All files'),
+            '${attachmentKeys.length}',
+          ),
+      ];
+      return Scaffold(
+        key: const ValueKey('chat-contact-profile-page'),
+        appBar: AppBar(title: Text(t('Profil', 'Профиль', 'Profile'))),
+        body: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 680),
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                children: [
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(22, 26, 22, 22),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Theme.of(context).colorScheme.primary,
+                          Theme.of(context).colorScheme.secondary,
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(28),
+                    ),
+                    child: Column(
+                      children: [
+                        _ChatAvatar(
+                          portal: widget.portal,
+                          contact: contact,
+                          name: name,
+                          radius: 52,
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          name,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          contact['is_online'] == true
+                              ? 'online'
+                              : role.isEmpty
+                              ? t(
+                                  'Maktab kontakti',
+                                  'Контакт школы',
+                                  'School contact',
+                                )
+                              : role,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: Colors.white.withValues(alpha: .82),
+                              ),
+                        ),
+                        const SizedBox(height: 18),
+                        FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: Theme.of(
+                              context,
+                            ).colorScheme.primary,
+                          ),
+                          onPressed: () => Navigator.of(context).maybePop(),
+                          icon: const Icon(Icons.chat_bubble_outline_rounded),
+                          label: Text(
+                            t(
+                              'Suhbatga qaytish',
+                              'Вернуться в чат',
+                              'Back to chat',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (phone.isNotEmpty || email.isNotEmpty)
+                    Row(
+                      children: [
+                        if (phone.isNotEmpty)
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () =>
+                                  launchUrl(Uri(scheme: 'tel', path: phone)),
+                              icon: const Icon(Icons.phone_outlined),
+                              label: Text(t('Qo‘ng‘iroq', 'Позвонить', 'Call')),
+                            ),
+                          ),
+                        if (phone.isNotEmpty && email.isNotEmpty)
+                          const SizedBox(width: 10),
+                        if (email.isNotEmpty)
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () =>
+                                  launchUrl(Uri(scheme: 'mailto', path: email)),
+                              icon: const Icon(Icons.mail_outline_rounded),
+                              label: const Text('Email'),
+                            ),
+                          ),
+                      ],
+                    ),
+                  if (phone.isNotEmpty || email.isNotEmpty)
+                    const SizedBox(height: 16),
+                  if (accountRows.isNotEmpty)
+                    _ChatProfileSection(
+                      title: t('Asosiy', 'Основное', 'Overview'),
+                      rows: accountRows,
+                    ),
+                  if (contactRows.isNotEmpty)
+                    _ChatProfileSection(
+                      title: t('Aloqa', 'Контакты', 'Contact'),
+                      rows: contactRows,
+                    ),
+                  if (educationRows.isNotEmpty)
+                    _ChatProfileSection(
+                      title: t(
+                        'Ta’lim va ish',
+                        'Учёба и работа',
+                        'Education and work',
+                      ),
+                      rows: educationRows,
+                    ),
+                  if (personalRows.isNotEmpty)
+                    _ChatProfileSection(
+                      title: t('Shaxsiy', 'Личное', 'Personal'),
+                      rows: personalRows,
+                    ),
+                  if (chatRows.isNotEmpty)
+                    _ChatProfileSection(
+                      title: t('Suhbat', 'Чат', 'Chat'),
+                      rows: chatRows,
+                    ),
+                  if (accountRows.isEmpty &&
+                      contactRows.isEmpty &&
+                      educationRows.isEmpty &&
+                      personalRows.isEmpty)
+                    _EmptyState(
+                      icon: Icons.person_search_outlined,
+                      title: t(
+                        'Profil ma’lumotlari cheklangan',
+                        'Данные профиля ограничены',
+                        'Profile information is limited',
+                      ),
+                      message: t(
+                        'Bu kontaktda hozircha faqat ism ko‘rsatilgan.',
+                        'Сейчас для этого контакта доступно только имя.',
+                        'Only the contact name is currently available.',
+                      ),
+                    ),
+                  if (snapshot.connectionState == ConnectionState.waiting) ...[
+                    const SizedBox(height: 12),
+                    _SectionCard(
+                      child: Row(
+                        children: [
+                          const SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              t(
+                                'Profil ma’lumotlari yangilanmoqda…',
+                                'Обновляем данные профиля…',
+                                'Updating profile information…',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _ChatProfileSection extends StatelessWidget {
+  const _ChatProfileSection({required this.title, required this.rows});
+
+  final String title;
+  final List<(IconData, String, String)> rows;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+        ),
+        _SectionCard(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            children: [
+              for (var index = 0; index < rows.length; index++) ...[
+                ListTile(
+                  leading: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      rows[index].$1,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  title: Text(rows[index].$2),
+                  subtitle: SelectableText(rows[index].$3),
+                ),
+                if (index != rows.length - 1)
+                  const Divider(height: 1, indent: 66),
+              ],
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ChatGroupInfoPage extends StatelessWidget {
+  const _ChatGroupInfoPage({
+    required this.portal,
+    required this.thread,
+    required this.contacts,
+  });
+
+  final PortalController portal;
+  final Map<String, Object?> thread;
+  final List<Map<String, Object?>> contacts;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = _workspaceThreadTitle(portal, thread);
+    return Scaffold(
+      key: const ValueKey('chat-group-info-page'),
+      appBar: AppBar(title: const Text('Guruh ma’lumoti')),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+              children: [
+                Center(
+                  child: _ChatAvatar(
+                    portal: portal,
+                    contact: const {},
+                    name: title,
+                    radius: 52,
+                    group: true,
+                  ),
+                ),
+                const SizedBox(height: 15),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  '${contacts.length + 1} ishtirokchi',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Ishtirokchilar',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 10),
+                _SectionCard(
+                  padding: const EdgeInsets.symmetric(vertical: 5),
+                  child: Column(
+                    children: [
+                      for (var index = 0; index < contacts.length; index++) ...[
+                        ListTile(
+                          onTap: () => _openChatContactProfile(
+                            context,
+                            portal,
+                            contacts[index],
+                            thread: thread,
+                          ),
+                          leading: _ChatAvatar(
+                            portal: portal,
+                            contact: contacts[index],
+                            name: valueText(contacts[index], const [
+                              'display_name',
+                              'username',
+                            ]),
+                            radius: 22,
+                          ),
+                          title: Text(
+                            valueText(contacts[index], const [
+                              'display_name',
+                              'username',
+                            ]),
+                          ),
+                          subtitle: Text(
+                            valueText(contacts[index], const ['role_label']),
+                          ),
+                          trailing: const Icon(Icons.chevron_right_rounded),
+                        ),
+                        if (index != contacts.length - 1)
+                          const Divider(height: 1, indent: 66),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _ThreadScreen extends StatefulWidget {
@@ -5276,13 +8415,18 @@ class _ThreadScreen extends StatefulWidget {
   State<_ThreadScreen> createState() => _ThreadScreenState();
 }
 
-class _ThreadScreenState extends State<_ThreadScreen> {
+class _ThreadScreenState extends State<_ThreadScreen>
+    with WidgetsBindingObserver {
   final _composer = TextEditingController();
   final _messageSearch = TextEditingController();
   final List<PlatformFile> _pendingFiles = [];
+  final Map<String, String> _pendingContentTypes = {};
   final AudioRecorder _recorder = AudioRecorder();
   Timer? _recordTimer;
   StreamSubscription<Amplitude>? _amplitudeSubscription;
+  Timer? _messagePollTimer;
+  bool _messagePolling = false;
+  bool _appActive = true;
   bool _sending = false;
   bool _searching = false;
   bool _recording = false;
@@ -5290,18 +8434,45 @@ class _ThreadScreenState extends State<_ThreadScreen> {
   bool _loadingMessages = true;
   Object? _loadError;
   String _sendingProgress = '';
+  String? _sendError;
   Duration _recordDuration = Duration.zero;
   double _recordLevel = 0;
   String _voiceExtension = 'webm';
+  DateTime? _voiceStartedAt;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         unawaited(_loadCurrentMessages());
+        _messagePollTimer = Timer.periodic(const Duration(seconds: 6), (_) {
+          final visible =
+              mounted &&
+              _appActive &&
+              (ModalRoute.of(context)?.isCurrent ?? true) &&
+              TickerMode.valuesOf(context).enabled;
+          if (visible && !_sending && !_recording && !_messagePolling) {
+            _messagePolling = true;
+            unawaited(
+              PortalScope.read(context)
+                  .ensureLatestMessagePage(widget.threadId)
+                  .catchError((_) {})
+                  .whenComplete(() => _messagePolling = false),
+            );
+          }
+        });
       }
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appActive = state == AppLifecycleState.resumed;
+    if (!_appActive && _recording) {
+      unawaited(_finishVoiceRecording(discard: true));
+    }
   }
 
   Future<void> _loadCurrentMessages({bool force = false}) async {
@@ -5313,7 +8484,8 @@ class _ThreadScreenState extends State<_ThreadScreen> {
       });
     }
     try {
-      await portal.loadMessages(widget.threadId, force: force);
+      await portal.loadMessages(widget.threadId, force: true);
+      await portal.ensureLatestMessagePage(widget.threadId);
       final controllerError = portal.messageErrors[widget.threadId];
       if (controllerError != null && mounted) {
         setState(() => _loadError = controllerError);
@@ -5339,25 +8511,68 @@ class _ThreadScreenState extends State<_ThreadScreen> {
 
   @override
   void dispose() {
+    _messagePollTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _recordTimer?.cancel();
     unawaited(_amplitudeSubscription?.cancel());
-    unawaited(_recorder.dispose());
+    unawaited(_disposeRecorder());
     _composer.dispose();
     _messageSearch.dispose();
     super.dispose();
   }
 
+  Future<void> _disposeRecorder() async {
+    try {
+      await _recorder.cancel();
+    } on Object {
+      // The native recorder can already be stopped during lifecycle teardown.
+    }
+    await _recorder.dispose();
+  }
+
   Future<void> _pickFiles() async {
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
-      withData: true,
+      withData: kIsWeb,
     );
+    _addPickedFiles(result);
+  }
+
+  Future<void> _pickImages() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: true,
+      withData: kIsWeb,
+    );
+    _addPickedFiles(result);
+  }
+
+  Future<void> _pickVideos() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.video,
+      allowMultiple: true,
+      withData: kIsWeb,
+    );
+    _addPickedFiles(result);
+  }
+
+  void _addPickedFiles(FilePickerResult? result) {
     if (result == null || !mounted) return;
+    const safeMemoryLimit = 100 * 1024 * 1024;
+    final accepted = result.files
+        .where((file) => file.size <= safeMemoryLimit)
+        .toList(growable: false);
     final remaining = 10 - _pendingFiles.length;
     setState(() {
-      _pendingFiles.addAll(result.files.take(remaining));
+      _pendingFiles.addAll(accepted.take(remaining));
     });
-    if (result.files.length > remaining && mounted) {
+    if (result.files.length != accepted.length && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bitta fayl 100 MB dan katta bo‘lmasligi kerak.'),
+        ),
+      );
+    } else if (accepted.length > remaining && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Bitta xabarga ko‘pi bilan 10 ta fayl.')),
       );
@@ -5367,13 +8582,10 @@ class _ThreadScreenState extends State<_ThreadScreen> {
   Future<void> _pickAudioFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: const ['mp3', 'm4a', 'ogg', 'opus', 'wav', 'webm'],
-      withData: true,
+      allowedExtensions: const ['mp3', 'm4a', 'ogg', 'opus', 'wav'],
+      withData: kIsWeb,
     );
-    if (result == null || !mounted) return;
-    setState(() {
-      if (_pendingFiles.length < 10) _pendingFiles.add(result.files.single);
-    });
+    _addPickedFiles(result);
   }
 
   Future<void> _startVoiceRecording() async {
@@ -5386,13 +8598,25 @@ class _ThreadScreenState extends State<_ThreadScreen> {
           code: 'microphone_permission_denied',
         );
       }
+      final aacSupported =
+          !kIsWeb && await _recorder.isEncoderSupported(AudioEncoder.aacLc);
       final opusSupported = await _recorder.isEncoderSupported(
         AudioEncoder.opus,
       );
-      _voiceExtension = opusSupported ? 'webm' : 'wav';
+      final encoder = aacSupported
+          ? AudioEncoder.aacLc
+          : opusSupported
+          ? AudioEncoder.opus
+          : AudioEncoder.wav;
+      _voiceExtension = aacSupported
+          ? 'm4a'
+          : opusSupported
+          ? (kIsWeb ? 'webm' : 'opus')
+          : 'wav';
+      final recordingPath = await createVoiceRecordingPath(_voiceExtension);
       await _recorder.start(
         RecordConfig(
-          encoder: opusSupported ? AudioEncoder.opus : AudioEncoder.wav,
+          encoder: encoder,
           bitRate: 64000,
           sampleRate: 48000,
           numChannels: 1,
@@ -5400,10 +8624,11 @@ class _ThreadScreenState extends State<_ThreadScreen> {
           echoCancel: true,
           noiseSuppress: true,
         ),
-        path: '',
+        path: recordingPath,
       );
       _recordDuration = Duration.zero;
       _recordLevel = 0;
+      _voiceStartedAt = DateTime.now();
       _recordTimer?.cancel();
       _recordTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (mounted) {
@@ -5422,6 +8647,14 @@ class _ThreadScreenState extends State<_ThreadScreen> {
           });
       if (mounted) setState(() => _recording = true);
     } on Object catch (error) {
+      _recordTimer?.cancel();
+      await _amplitudeSubscription?.cancel();
+      _amplitudeSubscription = null;
+      try {
+        await _recorder.cancel();
+      } on Object {
+        // A start failure can leave the platform recorder half-initialized.
+      }
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -5434,7 +8667,9 @@ class _ThreadScreenState extends State<_ThreadScreen> {
 
   Future<void> _finishVoiceRecording({required bool discard}) async {
     if (!_recording) return;
-    final duration = _recordDuration;
+    final duration = _voiceStartedAt == null
+        ? _recordDuration
+        : DateTime.now().difference(_voiceStartedAt!);
     _recordTimer?.cancel();
     await _amplitudeSubscription?.cancel();
     _amplitudeSubscription = null;
@@ -5448,6 +8683,14 @@ class _ThreadScreenState extends State<_ThreadScreen> {
         await _recorder.cancel();
         return;
       }
+      if (duration < const Duration(milliseconds: 350)) {
+        await _recorder.cancel();
+        throw const ApiException(
+          message:
+              'Ovozli xabar juda qisqa. Mikrofonni biroz uzoqroq bosib turing.',
+          code: 'voice_too_short',
+        );
+      }
       final path = await _recorder.stop();
       if (path == null || path.isEmpty) {
         throw const ApiException(
@@ -5455,21 +8698,52 @@ class _ThreadScreenState extends State<_ThreadScreen> {
           code: 'voice_recording_failed',
         );
       }
+      if (_voiceExtension == 'm4a' && !await normalizeRecordedM4aBrand(path)) {
+        throw const ApiException(
+          message: 'Ovoz yozuvining M4A formati noto‘g‘ri qaytdi.',
+          code: 'voice_container_invalid',
+        );
+      }
       final bytes = await readRecordedFileBytes(path);
+      if (bytes.length < 128) {
+        throw const ApiException(
+          message:
+              'Ovoz yozuvi bo‘sh chiqdi. Mikrofon ruxsatini tekshirib qayta urinib ko‘ring.',
+          code: 'voice_recording_empty',
+        );
+      }
+      final format = recordedVoiceUploadFormat(bytes, _voiceExtension);
+      try {
+        await deleteRecordedFile(path);
+      } on Object {
+        // A failed cache cleanup must never discard an otherwise valid voice.
+      }
       final seconds = duration.inSeconds.clamp(1, 599);
       final filename =
-          'voice-${seconds}s-${DateTime.now().millisecondsSinceEpoch}.$_voiceExtension';
+          'voice-${seconds}s-${DateTime.now().millisecondsSinceEpoch}.${format.extension}';
       final file = PlatformFile(
         name: filename,
         size: bytes.length,
         bytes: bytes,
       );
       if (mounted) {
+        if (_pendingFiles.length >= 10) {
+          throw const ApiException(
+            message: 'Bitta xabarga ko‘pi bilan 10 ta fayl yuboriladi.',
+          );
+        }
         setState(() {
-          if (_pendingFiles.length < 10) _pendingFiles.add(file);
+          _pendingFiles.add(file);
+          _pendingContentTypes[filename] = format.contentType;
         });
+        await _send();
       }
     } on Object catch (error) {
+      try {
+        await _recorder.cancel();
+      } on Object {
+        // The recorder may already be stopped after a platform-side failure.
+      }
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -5480,6 +8754,7 @@ class _ThreadScreenState extends State<_ThreadScreen> {
         setState(() {
           _preparingVoice = false;
           _recordDuration = Duration.zero;
+          _voiceStartedAt = null;
         });
       }
     }
@@ -5488,7 +8763,10 @@ class _ThreadScreenState extends State<_ThreadScreen> {
   Future<void> _send() async {
     final text = _composer.text.trim();
     if ((text.isEmpty && _pendingFiles.isEmpty) || _sending) return;
-    setState(() => _sending = true);
+    setState(() {
+      _sending = true;
+      _sendError = null;
+    });
     try {
       final portal = PortalScope.read(context);
       final attachments = <String>[];
@@ -5500,28 +8778,343 @@ class _ThreadScreenState extends State<_ThreadScreen> {
                 '${index + 1}/${_pendingFiles.length} fayl yuklanmoqda',
           );
         }
-        final bytes = file.bytes;
-        if (bytes == null) {
-          throw ApiException(message: '${file.name} faylini o‘qib bo‘lmadi.');
-        }
+        final bytes = await readSelectedFileBytes(file.bytes, file.path);
         attachments.add(
           await portal.uploadMessageFile(
             filename: file.name,
-            contentType: _contentType(file.extension),
+            contentType:
+                _pendingContentTypes[file.name] ??
+                _contentType(file.extension, filename: file.name),
             bytes: bytes,
           ),
         );
       }
       if (mounted) setState(() => _sendingProgress = 'Xabar yuborilmoqda');
       await portal.sendMessage(widget.threadId, text, attachments: attachments);
+      await portal.ensureLatestMessagePage(widget.threadId);
       _composer.clear();
       _pendingFiles.clear();
+      _pendingContentTypes.clear();
+    } on Object catch (error) {
+      if (mounted) {
+        setState(() => _sendError = _errorText(error));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_errorText(error))));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _sendingProgress = '';
+        });
+      }
+    }
+  }
+
+  Future<void> _showMessageActions(
+    Map<String, Object?> message, {
+    required bool mine,
+  }) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Xabar amallari',
+                style: Theme.of(sheetContext).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 12),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final emoji in const [
+                      '👍',
+                      '❤️',
+                      '😂',
+                      '😮',
+                      '😢',
+                      '🙏',
+                    ])
+                      Padding(
+                        padding: const EdgeInsets.only(right: 7),
+                        child: ActionChip(
+                          label: Text(
+                            emoji,
+                            style: const TextStyle(fontSize: 22),
+                          ),
+                          onPressed: () =>
+                              Navigator.pop(sheetContext, 'reaction:$emoji'),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              ListTile(
+                leading: const Icon(Icons.forward_rounded),
+                title: const Text('Boshqa suhbatga yuborish'),
+                onTap: () => Navigator.pop(sheetContext, 'forward'),
+              ),
+              if (mine)
+                ListTile(
+                  leading: const Icon(Icons.edit_outlined),
+                  title: const Text('Tahrirlash'),
+                  enabled: valueText(message, const [
+                    'body',
+                  ], fallback: '').isNotEmpty,
+                  onTap: () => Navigator.pop(sheetContext, 'edit'),
+                ),
+              if (mine)
+                ListTile(
+                  leading: Icon(
+                    Icons.delete_outline_rounded,
+                    color: Theme.of(sheetContext).colorScheme.error,
+                  ),
+                  title: Text(
+                    'O‘chirish',
+                    style: TextStyle(
+                      color: Theme.of(sheetContext).colorScheme.error,
+                    ),
+                  ),
+                  onTap: () => Navigator.pop(sheetContext, 'delete'),
+                ),
+              ListTile(
+                leading: const Icon(Icons.copy_rounded),
+                title: const Text('Nusxalash'),
+                enabled: valueText(message, const [
+                  'body',
+                ], fallback: '').isNotEmpty,
+                onTap: () => Navigator.pop(sheetContext, 'copy'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'copy') {
+      await Clipboard.setData(
+        ClipboardData(text: valueText(message, const ['body'], fallback: '')),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Xabar nusxalandi.')));
+      }
+      return;
+    }
+    if (action == 'forward') {
+      await _forwardMessage(message);
+      return;
+    }
+    final messageId = valueInt(message['id']);
+    if (messageId == null) return;
+    if (action.startsWith('reaction:')) {
+      final emoji = action.substring('reaction:'.length);
+      final portal = PortalScope.read(context);
+      await _setReaction(
+        message,
+        emoji,
+        remove: _messageHasOwnReaction(
+          message,
+          emoji,
+          portal.messagingSelfUserId,
+        ),
+      );
+      return;
+    }
+    if (action == 'edit') {
+      await _editMessage(message);
+      return;
+    }
+    if (action == 'delete') await _deleteMessage(message);
+  }
+
+  Future<void> _setReaction(
+    Map<String, Object?> message,
+    String emoji, {
+    required bool remove,
+  }) async {
+    final id = valueInt(message['id']);
+    if (id == null) return;
+    try {
+      await PortalScope.read(context).setMessageReaction(
+        threadId: widget.threadId,
+        messageId: id,
+        emoji: emoji,
+        remove: remove,
+      );
     } on Object catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(_errorText(error))));
       }
+    }
+  }
+
+  Future<void> _editMessage(Map<String, Object?> message) async {
+    final id = valueInt(message['id']);
+    final current = valueText(message, const ['body'], fallback: '');
+    if (id == null || current.isEmpty) return;
+    final controller = TextEditingController(text: current);
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Xabarni tahrirlash'),
+        content: TextField(
+          key: const ValueKey('chat-edit-message-field'),
+          controller: controller,
+          autofocus: true,
+          minLines: 2,
+          maxLines: 8,
+          decoration: const InputDecoration(hintText: 'Xabar matni'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Bekor qilish'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Saqlash'),
+          ),
+        ],
+      ),
+    );
+    final next = controller.text.trim();
+    controller.dispose();
+    if (accepted != true || next.isEmpty || next == current || !mounted) return;
+    try {
+      await PortalScope.read(
+        context,
+      ).editMessage(threadId: widget.threadId, messageId: id, body: next);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Xabar tahrirlandi.')));
+      }
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_errorText(error))));
+      }
+    }
+  }
+
+  Future<void> _deleteMessage(Map<String, Object?> message) async {
+    final id = valueInt(message['id']);
+    if (id == null) return;
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Xabar o‘chirilsinmi?'),
+        content: const Text('Bu amalni ortga qaytarib bo‘lmaydi.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Bekor qilish'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('O‘chirish'),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true || !mounted) return;
+    try {
+      await PortalScope.read(
+        context,
+      ).deleteMessage(threadId: widget.threadId, messageId: id);
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_errorText(error))));
+      }
+    }
+  }
+
+  Future<void> _forwardMessage(Map<String, Object?> message) async {
+    final portal = PortalScope.read(context);
+    final targets = portal.threads
+        .where((thread) => valueInt(thread['id']) != widget.threadId)
+        .toList(growable: false);
+    if (targets.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Yuborish uchun boshqa ochiq suhbat mavjud emas.'),
+        ),
+      );
+      return;
+    }
+    final targetId = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 560),
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+            children: [
+              Text(
+                'Kimga yuborilsin?',
+                style: Theme.of(sheetContext).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 10),
+              for (final thread in targets)
+                ListTile(
+                  leading: CircleAvatar(
+                    child: Text(_initials(portal.threadTitle(thread))),
+                  ),
+                  title: Text(portal.threadTitle(thread)),
+                  subtitle: Text(
+                    valueText(thread, const ['subject'], fallback: 'Suhbat'),
+                  ),
+                  onTap: () =>
+                      Navigator.pop(sheetContext, valueInt(thread['id'])),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (targetId == null || !mounted) return;
+    setState(() {
+      _sending = true;
+      _sendingProgress = 'Xabar boshqa suhbatga yuborilmoqda';
+      _sendError = null;
+    });
+    try {
+      await portal.forwardMessage(
+        sourceThreadId: widget.threadId,
+        targetThreadId: targetId,
+        message: message,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Xabar yuborildi.')));
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() => _sendError = _errorText(error));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_errorText(error))));
     } finally {
       if (mounted) {
         setState(() {
@@ -5551,16 +9144,30 @@ class _ThreadScreenState extends State<_ThreadScreen> {
                 ),
               ),
               _AttachmentChoice(
+                icon: Icons.photo_library_outlined,
+                title: 'Rasm',
+                subtitle: 'Chat ichida surat sifatida ko‘rinadi',
+                onTap: () => Navigator.pop(context, 'images'),
+              ),
+              const SizedBox(height: 8),
+              _AttachmentChoice(
+                icon: Icons.video_library_outlined,
+                title: 'Video',
+                subtitle: 'MP4, MOV, M4V yoki WEBM video yuboring',
+                onTap: () => Navigator.pop(context, 'videos'),
+              ),
+              const SizedBox(height: 8),
+              _AttachmentChoice(
                 icon: Icons.insert_drive_file_outlined,
-                title: 'Hujjat yoki rasm',
-                subtitle: 'Qurilmadan 10 tagacha fayl tanlang',
+                title: 'Hujjat',
+                subtitle: 'PDF, DOCX va boshqa fayllar',
                 onTap: () => Navigator.pop(context, 'files'),
               ),
               const SizedBox(height: 8),
               _AttachmentChoice(
                 icon: Icons.audio_file_outlined,
                 title: 'Tayyor audio',
-                subtitle: 'MP3, M4A, OGG, WAV yoki WEBM',
+                subtitle: 'MP3, M4A, OGG, OPUS yoki WAV',
                 onTap: () => Navigator.pop(context, 'audio'),
               ),
             ],
@@ -5569,6 +9176,8 @@ class _ThreadScreenState extends State<_ThreadScreen> {
       ),
     );
     if (!mounted) return;
+    if (choice == 'images') await _pickImages();
+    if (choice == 'videos') await _pickVideos();
     if (choice == 'files') await _pickFiles();
     if (choice == 'audio') await _pickAudioFile();
   }
@@ -5659,63 +9268,68 @@ class _ThreadScreenState extends State<_ThreadScreen> {
               ),
         surfaceTintColor: Colors.transparent,
         backgroundColor: colors.surface,
-        title: Row(
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                CircleAvatar(
-                  radius: 19,
-                  backgroundColor: colors.primary,
-                  foregroundColor: colors.onPrimary,
-                  child: Text(
-                    _initials(title),
-                    style: const TextStyle(fontSize: 11),
+        title: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: thread == null
+              ? null
+              : () => _openThreadInfo(context, portal, thread),
+          child: Row(
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _ChatAvatar(
+                    portal: portal,
+                    contact: contact,
+                    name: title,
+                    radius: 19,
+                    group: participants > 2,
                   ),
-                ),
-                if (contact['is_online'] == true)
-                  Positioned(
-                    right: -1,
-                    bottom: -1,
-                    child: Container(
-                      width: 11,
-                      height: 11,
-                      decoration: BoxDecoration(
-                        color: Sf.success,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.surface,
-                          width: 2,
+                  if (contact['is_online'] == true)
+                    Positioned(
+                      right: -1,
+                      bottom: -1,
+                      child: Container(
+                        width: 11,
+                        height: 11,
+                        decoration: BoxDecoration(
+                          color: Sf.success,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.surface,
+                            width: 2,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-              ],
-            ),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title),
-                  Text(
-                    contact['is_online'] == true
-                        ? 'online'
-                        : participants > 2
-                        ? '$participants ishtirokchi'
-                        : valueText(contact, const [
-                            'role_label',
-                          ], fallback: 'Maktab kontakti'),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: contact['is_online'] == true
-                          ? Sf.success
-                          : colors.onSurfaceVariant,
-                    ),
-                  ),
                 ],
               ),
-            ),
-          ],
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title),
+                    Text(
+                      contact['is_online'] == true
+                          ? 'online'
+                          : participants > 2
+                          ? '$participants ishtirokchi'
+                          : valueText(contact, const [
+                              'role_label',
+                            ], fallback: 'Maktab kontakti'),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: contact['is_online'] == true
+                            ? Sf.success
+                            : colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+            ],
+          ),
         ),
         actions: [
           IconButton(
@@ -5901,9 +9515,18 @@ class _ThreadScreenState extends State<_ThreadScreen> {
             child: Stack(
               children: [
                 Positioned.fill(
+                  child: ColoredBox(
+                    color: _chatWallpaperColor(
+                      portal.preferences.chatWallpaper,
+                      colors,
+                    ),
+                  ),
+                ),
+                Positioned.fill(
                   child: CustomPaint(
                     painter: _ChatBackgroundPainter(
                       color: colors.primary.withValues(alpha: 0.055),
+                      wallpaper: portal.preferences.chatWallpaper,
                     ),
                   ),
                 ),
@@ -5920,8 +9543,38 @@ class _ThreadScreenState extends State<_ThreadScreen> {
                   ListView.builder(
                     reverse: true,
                     padding: const EdgeInsets.fromLTRB(18, 8, 18, 14),
-                    itemCount: rows.length,
+                    itemCount:
+                        rows.length +
+                        (portal.hasOlderMessages(widget.threadId) ? 1 : 0),
                     itemBuilder: (context, reverseIndex) {
+                      if (reverseIndex == rows.length) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: OutlinedButton.icon(
+                              onPressed:
+                                  portal.loadingOlderMessages(widget.threadId)
+                                  ? null
+                                  : () => _runAction(
+                                      context,
+                                      () => portal.loadOlderMessages(
+                                        widget.threadId,
+                                      ),
+                                      success: 'Oldingi xabarlar yuklandi.',
+                                    ),
+                              icon: portal.loadingOlderMessages(widget.threadId)
+                                  ? const SizedBox.square(
+                                      dimension: 15,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.history_rounded),
+                              label: const Text('Oldingi xabarlarni yuklash'),
+                            ),
+                          ),
+                        );
+                      }
                       final messageIndex = rows.length - reverseIndex - 1;
                       final message = rows[messageIndex];
                       final sender = valueInt(message['sender']);
@@ -5967,6 +9620,7 @@ class _ThreadScreenState extends State<_ThreadScreen> {
                                 'display_name',
                                 'username',
                               ], fallback: 'Maktab vakili'),
+                        senderContact: senderContact ?? const {},
                         readByOther: mine
                             ? _messageReadByOther(
                                 thread: thread,
@@ -5974,13 +9628,20 @@ class _ThreadScreenState extends State<_ThreadScreen> {
                                 selfUserId: self,
                               )
                             : false,
-                        onAttachment: (key) => _runAction(context, () async {
-                          final url = await portal.messageAttachmentDownloadUrl(
-                            widget.threadId,
-                            key,
-                          );
-                          if (context.mounted) await _launch(context, url);
-                        }, success: 'Fayl ochildi.'),
+                        onAttachment: (key) => portal
+                            .messageAttachmentDownloadUrl(widget.threadId, key),
+                        onActions: () =>
+                            _showMessageActions(message, mine: mine),
+                        onSenderProfile: mine || senderContact == null
+                            ? null
+                            : () => _openChatContactProfile(
+                                context,
+                                portal,
+                                senderContact,
+                                thread: thread ?? const {},
+                              ),
+                        onReaction: (emoji, remove) =>
+                            _setReaction(message, emoji, remove: remove),
                       );
                     },
                   ),
@@ -6021,6 +9682,47 @@ class _ThreadScreenState extends State<_ThreadScreen> {
                             ),
                             const SizedBox(height: 7),
                           ],
+                          if (_sendError != null) ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 11,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colors.errorContainer,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.error_outline_rounded,
+                                    size: 18,
+                                    color: colors.error,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Yuborilmadi: $_sendError. Matn va fayllar saqlandi — qayta yuboring.',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Xatoni yopish',
+                                    onPressed: () =>
+                                        setState(() => _sendError = null),
+                                    icon: const Icon(
+                                      Icons.close_rounded,
+                                      size: 18,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 7),
+                          ],
                           if (_pendingFiles.isNotEmpty) ...[
                             Row(
                               children: [
@@ -6053,10 +9755,13 @@ class _ThreadScreenState extends State<_ThreadScreen> {
                                       file: _pendingFiles[index],
                                       onRemove: _sending
                                           ? null
-                                          : () => setState(
-                                              () =>
-                                                  _pendingFiles.removeAt(index),
-                                            ),
+                                          : () => setState(() {
+                                              final removed = _pendingFiles
+                                                  .removeAt(index);
+                                              _pendingContentTypes.remove(
+                                                removed.name,
+                                              );
+                                            }),
                                     ),
                               ),
                             ),
@@ -6082,7 +9787,7 @@ class _ThreadScreenState extends State<_ThreadScreen> {
                                 ),
                                 const SizedBox(width: 8),
                                 IconButton.filled(
-                                  tooltip: 'Yozuvni tayyorlash',
+                                  tooltip: 'Ovozli xabarni yuborish',
                                   onPressed: () =>
                                       _finishVoiceRecording(discard: false),
                                   icon: const Icon(Icons.check_rounded),
@@ -6368,6 +10073,18 @@ bool _messageReadByOther({
 
 bool _isAudioAttachment(String key) {
   final normalized = key.toLowerCase().split('?').first;
+  final isVoice = _attachmentDisplayName(normalized).startsWith('voice-');
+  if (isVoice &&
+      const [
+        '.webm',
+        '.mp4',
+        '.m4a',
+        '.ogg',
+        '.opus',
+        '.wav',
+      ].any(normalized.endsWith)) {
+    return true;
+  }
   return const [
     '.mp3',
     '.m4a',
@@ -6375,8 +10092,50 @@ bool _isAudioAttachment(String key) {
     '.ogg',
     '.opus',
     '.wav',
-    '.webm',
   ].any(normalized.endsWith);
+}
+
+bool _isImageAttachment(String key) {
+  final normalized = key.toLowerCase().split('?').first;
+  return const [
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.gif',
+    '.webp',
+  ].any(normalized.endsWith);
+}
+
+bool _isVideoAttachment(String key) {
+  if (_isAudioAttachment(key)) return false;
+  final normalized = key.toLowerCase().split('?').first;
+  return const ['.mp4', '.mov', '.m4v', '.3gp'].any(normalized.endsWith) ||
+      normalized.endsWith('.webm');
+}
+
+String _messageAttachmentKey(Object? value) {
+  if (value is Map) {
+    for (final key in const [
+      'key',
+      'attachment_key',
+      'file_key',
+      'storage_key',
+      'path',
+    ]) {
+      final text = '${value[key] ?? ''}'.trim();
+      if (text.isNotEmpty && text != 'null') return text;
+    }
+    return '';
+  }
+  final text = '${value ?? ''}'.trim();
+  return text == 'null' ? '' : text;
+}
+
+String _audioTime(Duration value) {
+  final total = value.inSeconds.clamp(0, 359999);
+  final minutes = total ~/ 60;
+  final seconds = (total % 60).toString().padLeft(2, '0');
+  return '$minutes:$seconds';
 }
 
 String _attachmentDisplayName(String key) {
@@ -6397,13 +10156,19 @@ String _voiceDurationLabel(String key) {
   return 'Ovozli xabar · $minutes:$seconds';
 }
 
+String _attachmentPreviewLabel(String key) {
+  if (_isImageAttachment(key)) return 'Rasm';
+  if (_isVideoAttachment(key)) return 'Video';
+  if (_isAudioAttachment(key)) return 'Ovozli xabar';
+  return 'Biriktirilgan fayl';
+}
+
 IconData _attachmentIcon(String key) {
   final normalized = key.toLowerCase().split('?').first;
   if (_isAudioAttachment(key)) return Icons.graphic_eq_rounded;
+  if (_isVideoAttachment(key)) return Icons.play_circle_outline_rounded;
   if (normalized.endsWith('.pdf')) return Icons.picture_as_pdf_outlined;
-  if (normalized.endsWith('.png') ||
-      normalized.endsWith('.jpg') ||
-      normalized.endsWith('.jpeg')) {
+  if (_isImageAttachment(key)) {
     return Icons.image_outlined;
   }
   if (normalized.endsWith('.doc') || normalized.endsWith('.docx')) {
@@ -6439,11 +10204,24 @@ class _PendingFileChip extends StatelessWidget {
               color: colors.surface,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(
-              _attachmentIcon(file.name),
-              size: 19,
-              color: colors.primary,
-            ),
+            child: _isImageAttachment(file.name) && file.bytes != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.memory(
+                      file.bytes!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => Icon(
+                        Icons.image_outlined,
+                        size: 19,
+                        color: colors.primary,
+                      ),
+                    ),
+                  )
+                : Icon(
+                    _attachmentIcon(file.name),
+                    size: 19,
+                    color: colors.primary,
+                  ),
           ),
           const SizedBox(width: 8),
           Flexible(
@@ -6786,9 +10564,10 @@ class _MessageEmptyPane extends StatelessWidget {
 }
 
 class _ChatBackgroundPainter extends CustomPainter {
-  const _ChatBackgroundPainter({required this.color});
+  const _ChatBackgroundPainter({required this.color, required this.wallpaper});
 
   final Color color;
+  final PortalChatWallpaper wallpaper;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -6797,12 +10576,37 @@ class _ChatBackgroundPainter extends CustomPainter {
       ..color = color
       ..strokeWidth = 1.15
       ..style = PaintingStyle.stroke;
-    const step = 54.0;
+    final step = switch (wallpaper) {
+      PortalChatWallpaper.whatsappPattern => 42.0,
+      PortalChatWallpaper.space => 68.0,
+      PortalChatWallpaper.sakura => 62.0,
+      PortalChatWallpaper.abstract => 46.0,
+      _ => 54.0,
+    };
     for (var y = 18.0; y < size.height; y += step) {
       for (var x = 18.0; x < size.width; x += step) {
         final shiftedX = x + (((y / step).round().isEven) ? 0 : step / 2);
-        canvas.drawCircle(Offset(shiftedX, y), 2, dot);
-        if (((x + y) / step).round().isEven) {
+        final center = Offset(shiftedX, y);
+        if (wallpaper == PortalChatWallpaper.mountains) {
+          canvas.drawLine(center, center.translate(10, -12), line);
+          canvas.drawLine(
+            center.translate(10, -12),
+            center.translate(20, 0),
+            line,
+          );
+        } else if (wallpaper == PortalChatWallpaper.sakura) {
+          canvas.drawCircle(center, 3.4, dot);
+          canvas.drawCircle(center.translate(5, 2), 2.2, dot);
+        } else {
+          canvas.drawCircle(
+            center,
+            wallpaper == PortalChatWallpaper.space ? 1.2 : 2,
+            dot,
+          );
+        }
+        if (((x + y) / step).round().isEven &&
+            wallpaper != PortalChatWallpaper.mountains &&
+            wallpaper != PortalChatWallpaper.space) {
           canvas.drawArc(
             Rect.fromCircle(center: Offset(shiftedX + 12, y + 12), radius: 5),
             0.2,
@@ -6817,8 +10621,130 @@ class _ChatBackgroundPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ChatBackgroundPainter oldDelegate) =>
-      oldDelegate.color != color;
+      oldDelegate.color != color || oldDelegate.wallpaper != wallpaper;
 }
+
+Color _chatWallpaperColor(PortalChatWallpaper wallpaper, ColorScheme colors) =>
+    switch (wallpaper) {
+      PortalChatWallpaper.telegramClouds => colors.surfaceContainerLow,
+      PortalChatWallpaper.whatsappPattern => Color.alphaBlend(
+        colors.primary.withValues(alpha: .06),
+        colors.surfaceContainerLow,
+      ),
+      PortalChatWallpaper.mountains => Color.alphaBlend(
+        colors.secondary.withValues(alpha: .09),
+        colors.surfaceContainerLow,
+      ),
+      PortalChatWallpaper.aurora => Color.alphaBlend(
+        colors.tertiary.withValues(alpha: .13),
+        colors.surfaceContainerLow,
+      ),
+      PortalChatWallpaper.space =>
+        colors.brightness == Brightness.dark
+            ? const Color(0xFF111827)
+            : const Color(0xFFE8EDF5),
+      PortalChatWallpaper.ocean => Color.alphaBlend(
+        const Color(0x1F168AAD),
+        colors.surfaceContainerLow,
+      ),
+      PortalChatWallpaper.sakura => Color.alphaBlend(
+        const Color(0x20D6608A),
+        colors.surfaceContainerLow,
+      ),
+      PortalChatWallpaper.abstract => colors.surfaceContainer,
+      PortalChatWallpaper.gradient => Color.alphaBlend(
+        colors.primary.withValues(alpha: .1),
+        colors.surfaceContainerLow,
+      ),
+      PortalChatWallpaper.blur => colors.surface.withValues(alpha: .92),
+    };
+
+typedef _MessageReaction = ({String emoji, int count, bool mine});
+
+List<_MessageReaction> _messageReactions(
+  Map<String, Object?> message,
+  int? selfUserId,
+) {
+  final merged = <String, _MessageReaction>{};
+  final myRaw = message['my_reactions'] ?? message['viewer_reactions'];
+  final myReactions = myRaw is List
+      ? myRaw.map((value) => '$value').toSet()
+      : <String>{};
+
+  void add(String emoji, int count, bool mine) {
+    final value = emoji.trim();
+    if (value.isEmpty || count < 1) return;
+    final previous = merged[value];
+    merged[value] = (
+      emoji: value,
+      count: previous == null ? count : previous.count + count,
+      mine: mine || (previous?.mine ?? false) || myReactions.contains(value),
+    );
+  }
+
+  bool isMine(Map raw, String emoji) {
+    if (raw['reacted_by_me'] == true ||
+        raw['mine'] == true ||
+        raw['selected'] == true ||
+        raw['has_reacted'] == true ||
+        myReactions.contains(emoji)) {
+      return true;
+    }
+    final users = raw['user_ids'] ?? raw['users'];
+    return selfUserId != null &&
+        users is List &&
+        users.any(
+          (value) => valueInt(value is Map ? value['id'] : value) == selfUserId,
+        );
+  }
+
+  final raw = message['reactions'] ?? message['reaction_counts'];
+  if (raw is Map) {
+    for (final entry in raw.entries) {
+      final emoji = '${entry.key}';
+      final value = entry.value;
+      if (value is num) {
+        add(emoji, value.toInt(), myReactions.contains(emoji));
+      } else if (value is Map) {
+        add(
+          valueText(Map<String, Object?>.from(value), const [
+            'emoji',
+            'reaction',
+          ], fallback: emoji),
+          valueInt(value['count'] ?? value['total']) ?? 1,
+          isMine(value, emoji),
+        );
+      }
+    }
+  } else if (raw is List) {
+    for (final value in raw) {
+      if (value is String) {
+        add(value, 1, myReactions.contains(value));
+      } else if (value is Map) {
+        final emoji = valueText(Map<String, Object?>.from(value), const [
+          'emoji',
+          'reaction',
+          'code',
+        ], fallback: '');
+        add(
+          emoji,
+          valueInt(value['count'] ?? value['total']) ?? 1,
+          isMine(value, emoji),
+        );
+      }
+    }
+  }
+  return merged.values.toList(growable: false);
+}
+
+bool _messageHasOwnReaction(
+  Map<String, Object?> message,
+  String emoji,
+  int? selfUserId,
+) => _messageReactions(
+  message,
+  selfUserId,
+).any((reaction) => reaction.emoji == emoji && reaction.mine);
 
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
@@ -6828,8 +10754,12 @@ class _MessageBubble extends StatelessWidget {
     required this.firstInGroup,
     required this.lastInGroup,
     required this.senderName,
+    required this.senderContact,
     required this.readByOther,
     required this.onAttachment,
+    required this.onActions,
+    required this.onReaction,
+    this.onSenderProfile,
   });
 
   final Map<String, Object?> message;
@@ -6838,22 +10768,51 @@ class _MessageBubble extends StatelessWidget {
   final bool firstInGroup;
   final bool lastInGroup;
   final String senderName;
+  final Map<String, Object?> senderContact;
   final bool readByOther;
-  final ValueChanged<String> onAttachment;
+  final Future<String> Function(String) onAttachment;
+  final VoidCallback onActions;
+  final void Function(String emoji, bool remove) onReaction;
+  final VoidCallback? onSenderProfile;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final portal = PortalScope.of(context);
+    final chatStyle = portal.preferences.chatStyle;
     final body = valueText(message, const ['body'], fallback: '');
     final rawAttachments = message['attachments'];
     final attachments = rawAttachments is List
         ? rawAttachments
-              .map((item) => '$item')
+              .map(_messageAttachmentKey)
               .where((item) => item.isNotEmpty)
               .toList()
         : const <String>[];
-    final foreground = mine ? colors.onPrimary : colors.onSurface;
-    final bubbleColor = mine ? colors.primary : colors.surface;
+    final reactions = _messageReactions(message, portal.messagingSelfUserId);
+    final bubbleColor = switch ((chatStyle, mine)) {
+      (PortalChatStyle.whatsapp, true) => const Color(0xFF176B5B),
+      (PortalChatStyle.modernDark, true) => const Color(0xFF315C89),
+      (PortalChatStyle.modernDark, false) => const Color(0xFF252A31),
+      (PortalChatStyle.glass, true) => colors.primary.withValues(alpha: .82),
+      (PortalChatStyle.glass, false) => colors.surface.withValues(alpha: .78),
+      (PortalChatStyle.minimal, true) => colors.primaryContainer,
+      (PortalChatStyle.minimal, false) => colors.surface,
+      (PortalChatStyle.neon, true) => const Color(0xFF263264),
+      (PortalChatStyle.neon, false) => const Color(0xFF202333),
+      (PortalChatStyle.nature, true) => const Color(0xFF486B45),
+      (PortalChatStyle.gradient, true) => colors.primary,
+      (_, true) => colors.primary,
+      (_, false) => colors.surface,
+    };
+    final darkBubble =
+        chatStyle == PortalChatStyle.modernDark ||
+        chatStyle == PortalChatStyle.neon ||
+        (mine && chatStyle != PortalChatStyle.minimal);
+    final foreground = darkBubble
+        ? Colors.white
+        : mine && chatStyle == PortalChatStyle.minimal
+        ? colors.onPrimaryContainer
+        : colors.onSurface;
     final maxBubbleWidth = (MediaQuery.sizeOf(context).width * 0.76)
         .clamp(220.0, 560.0)
         .toDouble();
@@ -6886,98 +10845,193 @@ class _MessageBubble extends StatelessWidget {
           ),
         Align(
           alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-            child: GestureDetector(
-              onLongPress: body.isEmpty
-                  ? null
-                  : () async {
-                      await Clipboard.setData(ClipboardData(text: body));
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Xabar nusxalandi.')),
-                        );
-                      }
-                    },
-              child: Container(
-                margin: EdgeInsets.only(bottom: lastInGroup ? 9 : 2),
-                padding: const EdgeInsets.fromLTRB(13, 9, 9, 6),
-                decoration: BoxDecoration(
-                  color: bubbleColor,
-                  border: Border.all(
-                    color: mine ? colors.primary : colors.outlineVariant,
-                  ),
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(!mine && !firstInGroup ? 7 : 15),
-                    topRight: Radius.circular(mine && !firstInGroup ? 7 : 15),
-                    bottomLeft: Radius.circular(!mine && lastInGroup ? 4 : 15),
-                    bottomRight: Radius.circular(mine && lastInGroup ? 4 : 15),
-                  ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (!mine) ...[
+                SizedBox.square(
+                  dimension: 32,
+                  child: lastInGroup
+                      ? _ChatAvatar(
+                          portal: portal,
+                          contact: senderContact,
+                          name: senderName,
+                          radius: 16,
+                          onTap: onSenderProfile,
+                        )
+                      : null,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (!mine && firstInGroup) ...[
-                      Text(
-                        senderName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(
-                              color: colors.primary,
-                              fontWeight: FontWeight.w800,
-                            ),
+                const SizedBox(width: 7),
+              ],
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: maxBubbleWidth - (mine ? 0 : 39),
+                ),
+                child: GestureDetector(
+                  onLongPress: onActions,
+                  child: Container(
+                    margin: EdgeInsets.only(bottom: lastInGroup ? 9 : 2),
+                    padding: const EdgeInsets.fromLTRB(13, 9, 9, 6),
+                    decoration: BoxDecoration(
+                      color: bubbleColor,
+                      border: Border.all(
+                        color: chatStyle == PortalChatStyle.neon
+                            ? (mine
+                                  ? const Color(0xFF7DD3FC)
+                                  : const Color(0xFFA78BFA))
+                            : mine
+                            ? colors.primary
+                            : colors.outlineVariant,
                       ),
-                      const SizedBox(height: 3),
-                    ],
-                    if (body.isNotEmpty)
-                      SelectableText(
-                        body,
-                        style: TextStyle(color: foreground, height: 1.35),
-                      ),
-                    for (final key in attachments) ...[
-                      if (body.isNotEmpty || key != attachments.first)
-                        const SizedBox(height: 8),
-                      _MessageAttachmentTile(
-                        keyName: key,
-                        mine: mine,
-                        onTap: () => onAttachment(key),
-                      ),
-                    ],
-                    const SizedBox(height: 3),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Text(
-                          _timeOnly(message['created_at']),
-                          style: Sf.monoStyle(
-                            size: 8.5,
-                            weight: FontWeight.w500,
-                            color: foreground.withValues(alpha: 0.72),
-                          ),
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(
+                          !mine && !firstInGroup ? 7 : 15,
                         ),
-                        if (mine) ...[
-                          const SizedBox(width: 3),
-                          Tooltip(
-                            message: readByOther ? 'O‘qilgan' : 'Yuborilgan',
-                            child: Icon(
-                              readByOther
-                                  ? Icons.done_all_rounded
-                                  : Icons.done_rounded,
-                              size: 16,
-                              color: readByOther
-                                  ? (mine ? colors.onPrimary : colors.primary)
-                                  : foreground.withValues(alpha: 0.68),
-                            ),
+                        topRight: Radius.circular(
+                          mine && !firstInGroup ? 7 : 15,
+                        ),
+                        bottomLeft: Radius.circular(
+                          !mine && lastInGroup ? 4 : 15,
+                        ),
+                        bottomRight: Radius.circular(
+                          mine && lastInGroup ? 4 : 15,
+                        ),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (!mine && firstInGroup) ...[
+                          Text(
+                            senderName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(
+                                  color: colors.primary,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                          const SizedBox(height: 3),
+                        ],
+                        if (body.isNotEmpty)
+                          SelectableText(
+                            body,
+                            style: TextStyle(color: foreground, height: 1.35),
+                          ),
+                        for (final key in attachments) ...[
+                          if (body.isNotEmpty || key != attachments.first)
+                            const SizedBox(height: 8),
+                          _MessageAttachmentTile(
+                            keyName: key,
+                            mine: mine,
+                            urlResolver: () => onAttachment(key),
                           ),
                         ],
+                        if (reactions.isNotEmpty) ...[
+                          const SizedBox(height: 7),
+                          Wrap(
+                            spacing: 5,
+                            runSpacing: 5,
+                            children: [
+                              for (final reaction in reactions)
+                                InkWell(
+                                  borderRadius: BorderRadius.circular(99),
+                                  onTap: () =>
+                                      onReaction(reaction.emoji, reaction.mine),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: reaction.mine
+                                          ? colors.primaryContainer
+                                          : foreground.withValues(alpha: .1),
+                                      borderRadius: BorderRadius.circular(99),
+                                      border: Border.all(
+                                        color: reaction.mine
+                                            ? colors.primary
+                                            : foreground.withValues(alpha: .16),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      '${reaction.emoji} ${reaction.count}',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.copyWith(
+                                            color: reaction.mine
+                                                ? colors.onPrimaryContainer
+                                                : foreground,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: 3),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Text(
+                              _timeOnly(message['created_at']),
+                              style: Sf.monoStyle(
+                                size: 8.5,
+                                weight: FontWeight.w500,
+                                color: foreground.withValues(alpha: 0.72),
+                              ),
+                            ),
+                            if (mine) ...[
+                              const SizedBox(width: 3),
+                              Tooltip(
+                                message: readByOther
+                                    ? 'O‘qilgan'
+                                    : 'Yuborilgan',
+                                child: Icon(
+                                  readByOther
+                                      ? Icons.done_all_rounded
+                                      : Icons.done_rounded,
+                                  size: 16,
+                                  color: readByOther
+                                      ? (mine
+                                            ? colors.onPrimary
+                                            : colors.primary)
+                                      : foreground.withValues(alpha: 0.68),
+                                ),
+                              ),
+                            ],
+                            const SizedBox(width: 2),
+                            Tooltip(
+                              message: 'Xabar amallari',
+                              child: InkWell(
+                                key: ValueKey(
+                                  'message-actions-${message['id']}',
+                                ),
+                                borderRadius: BorderRadius.circular(99),
+                                onTap: onActions,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(3),
+                                  child: Icon(
+                                    Icons.more_horiz_rounded,
+                                    size: 16,
+                                    color: foreground.withValues(alpha: 0.72),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
         ),
       ],
@@ -6985,30 +11039,219 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
-class _MessageAttachmentTile extends StatelessWidget {
+class _MessageAttachmentTile extends StatefulWidget {
   const _MessageAttachmentTile({
     required this.keyName,
     required this.mine,
-    required this.onTap,
+    required this.urlResolver,
   });
 
   final String keyName;
   final bool mine;
-  final VoidCallback onTap;
+  final Future<String> Function() urlResolver;
+
+  @override
+  State<_MessageAttachmentTile> createState() => _MessageAttachmentTileState();
+}
+
+class _MessageAttachmentTileState extends State<_MessageAttachmentTile> {
+  bool _opening = false;
+  AudioPlayer? _player;
+  PlayerState _playerState = PlayerState.stopped;
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+  String? _audioUrl;
+  String? _mediaUrl;
+  Object? _mediaError;
+  VideoPlayerController? _videoController;
+
+  bool get _audio => _isAudioAttachment(widget.keyName);
+  bool get _image => _isImageAttachment(widget.keyName);
+  bool get _video => _isVideoAttachment(widget.keyName);
+
+  @override
+  void initState() {
+    super.initState();
+    if (_audio) {
+      final player = _player = AudioPlayer();
+      player.onPlayerStateChanged.listen((state) {
+        if (mounted) setState(() => _playerState = state);
+      });
+      player.onPositionChanged.listen((position) {
+        if (mounted) setState(() => _position = position);
+      });
+      player.onDurationChanged.listen((duration) {
+        if (mounted) setState(() => _duration = duration);
+      });
+      player.onPlayerComplete.listen((_) {
+        if (mounted) {
+          setState(() {
+            _position = _duration;
+            _playerState = PlayerState.completed;
+          });
+        }
+      });
+    }
+    if (_image || _video) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_prepareMedia());
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    final player = _player;
+    if (player != null) unawaited(player.dispose());
+    final video = _videoController;
+    if (video != null) unawaited(video.dispose());
+    super.dispose();
+  }
+
+  Future<void> _prepareMedia() async {
+    if (_opening || _mediaUrl != null) return;
+    setState(() {
+      _opening = true;
+      _mediaError = null;
+    });
+    VideoPlayerController? initializingController;
+    try {
+      final url = await widget.urlResolver();
+      VideoPlayerController? controller;
+      if (_video) {
+        controller = VideoPlayerController.networkUrl(Uri.parse(url));
+        initializingController = controller;
+        await controller.initialize();
+        await controller.setLooping(false);
+        controller.addListener(() {
+          if (mounted) setState(() {});
+        });
+      }
+      if (!mounted) {
+        await controller?.dispose();
+        return;
+      }
+      setState(() {
+        _mediaUrl = url;
+        _videoController = controller;
+      });
+    } on Object catch (error) {
+      await initializingController?.dispose();
+      if (mounted) setState(() => _mediaError = error);
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
+  }
+
+  Future<void> _retryMedia() async {
+    final previous = _videoController;
+    if (previous != null) await previous.dispose();
+    if (!mounted) return;
+    setState(() {
+      _videoController = null;
+      _mediaUrl = null;
+      _mediaError = null;
+    });
+    await _prepareMedia();
+  }
+
+  Future<void> _openVideoFullscreen() async {
+    final controller = _videoController;
+    final url = _mediaUrl;
+    if (controller == null || url == null || !mounted) return;
+    await controller.pause();
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _VideoViewerScreen(
+          url: url,
+          name: _attachmentDisplayName(widget.keyName),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _open() async {
+    if (_opening) return;
+    if (_image) {
+      if (_mediaUrl == null) await _prepareMedia();
+      if (mounted && _mediaUrl != null) {
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => _ImageViewerScreen(
+              url: _mediaUrl!,
+              name: _attachmentDisplayName(widget.keyName),
+            ),
+          ),
+        );
+      }
+      return;
+    }
+    if (_video) {
+      if (_videoController == null) await _prepareMedia();
+      final controller = _videoController;
+      if (controller == null) return;
+      if (controller.value.isPlaying) {
+        await controller.pause();
+      } else {
+        if (controller.value.position >= controller.value.duration) {
+          await controller.seekTo(Duration.zero);
+        }
+        await controller.play();
+      }
+      return;
+    }
+    if (_audio && _playerState == PlayerState.playing) {
+      await _player?.pause();
+      return;
+    }
+    if (_audio && _audioUrl != null && _playerState == PlayerState.paused) {
+      await _player?.resume();
+      return;
+    }
+    setState(() => _opening = true);
+    try {
+      final url = _audioUrl ?? await widget.urlResolver();
+      if (_audio) {
+        _audioUrl = url;
+        if (_playerState == PlayerState.completed) {
+          await _player?.seek(Duration.zero);
+        }
+        await _player?.play(UrlSource(url));
+      } else if (mounted) {
+        await _launch(context, url);
+      }
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_errorText(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
+  }
+
+  Future<void> _seek(double milliseconds) async {
+    await _player?.seek(Duration(milliseconds: milliseconds.round()));
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final audio = _isAudioAttachment(keyName);
-    final foreground = mine ? colors.onPrimary : colors.onSurfaceVariant;
+    if (_image) return _buildImage(context, colors);
+    if (_video) return _buildVideo(context, colors);
+    final audio = _audio;
+    final playing = _playerState == PlayerState.playing;
+    final foreground = widget.mine ? colors.onPrimary : colors.onSurfaceVariant;
     return Material(
-      color: mine
+      color: widget.mine
           ? colors.surface.withValues(alpha: 0.18)
           : colors.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
+        onTap: _opening ? null : _open,
         child: ConstrainedBox(
           constraints: BoxConstraints(minWidth: audio ? 230 : 190),
           child: Padding(
@@ -7023,11 +11266,23 @@ class _MessageAttachmentTile extends StatelessWidget {
                     color: colors.primary,
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    audio ? Icons.play_arrow_rounded : _attachmentIcon(keyName),
-                    color: colors.onPrimary,
-                    size: audio ? 25 : 21,
-                  ),
+                  child: _opening
+                      ? Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: colors.onPrimary,
+                          ),
+                        )
+                      : Icon(
+                          audio
+                              ? playing
+                                    ? Icons.pause_rounded
+                                    : Icons.play_arrow_rounded
+                              : _attachmentIcon(widget.keyName),
+                          color: colors.onPrimary,
+                          size: audio ? 25 : 21,
+                        ),
                 ),
                 const SizedBox(width: 9),
                 if (audio) ...[
@@ -7035,37 +11290,34 @@ class _MessageAttachmentTile extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            for (final height in const [
-                              5.0,
-                              11.0,
-                              17.0,
-                              8.0,
-                              14.0,
-                              20.0,
-                              10.0,
-                              16.0,
-                              7.0,
-                              13.0,
-                              18.0,
-                              9.0,
-                            ])
-                              Container(
-                                width: 2.5,
-                                height: height,
-                                margin: const EdgeInsets.only(right: 2.5),
-                                decoration: BoxDecoration(
-                                  color: colors.primary.withValues(alpha: 0.72),
-                                  borderRadius: BorderRadius.circular(99),
-                                ),
-                              ),
-                          ],
+                        SliderTheme(
+                          data: SliderTheme.of(context).copyWith(
+                            trackHeight: 2.5,
+                            thumbShape: const RoundSliderThumbShape(
+                              enabledThumbRadius: 5,
+                            ),
+                            overlayShape: const RoundSliderOverlayShape(
+                              overlayRadius: 11,
+                            ),
+                          ),
+                          child: Slider(
+                            value: _duration.inMilliseconds == 0
+                                ? 0
+                                : _position.inMilliseconds
+                                      .clamp(0, _duration.inMilliseconds)
+                                      .toDouble(),
+                            max: _duration.inMilliseconds == 0
+                                ? 1
+                                : _duration.inMilliseconds.toDouble(),
+                            onChanged: _duration.inMilliseconds == 0
+                                ? null
+                                : (value) => unawaited(_seek(value)),
+                          ),
                         ),
-                        const SizedBox(height: 2),
                         Text(
-                          '${_voiceDurationLabel(keyName)} · ochish',
+                          _opening
+                              ? 'Audio tayyorlanmoqda…'
+                              : '${_audioTime(_position)} / ${_duration == Duration.zero ? _voiceDurationLabel(widget.keyName) : _audioTime(_duration)}${playing ? ' · ijro etilmoqda' : ''}',
                           style: Theme.of(
                             context,
                           ).textTheme.labelSmall?.copyWith(color: foreground),
@@ -7079,7 +11331,7 @@ class _MessageAttachmentTile extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _attachmentDisplayName(keyName),
+                          _attachmentDisplayName(widget.keyName),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.labelMedium
@@ -7089,7 +11341,7 @@ class _MessageAttachmentTile extends StatelessWidget {
                               ),
                         ),
                         Text(
-                          'Ochish uchun bosing',
+                          _opening ? 'Yuklanmoqda…' : 'Ochish uchun bosing',
                           style: Theme.of(
                             context,
                           ).textTheme.labelSmall?.copyWith(color: foreground),
@@ -7107,8 +11359,305 @@ class _MessageAttachmentTile extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildImage(BuildContext context, ColorScheme colors) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 320),
+      child: AspectRatio(
+        aspectRatio: 4 / 3,
+        child: Material(
+          clipBehavior: Clip.antiAlias,
+          color: widget.mine
+              ? colors.surface.withValues(alpha: .16)
+              : colors.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(15),
+          child: InkWell(
+            onTap: _opening ? null : _open,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (_mediaUrl case final url?)
+                  Image.network(
+                    url,
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                    errorBuilder: (_, error, _) => _MediaLoadFailure(
+                      label: 'Rasmni ochib bo‘lmadi',
+                      onRetry: _retryMedia,
+                    ),
+                  )
+                else if (_mediaError != null)
+                  _MediaLoadFailure(
+                    label: 'Rasmni ochib bo‘lmadi',
+                    onRetry: _retryMedia,
+                  )
+                else
+                  const Center(child: CircularProgressIndicator()),
+                if (_mediaUrl != null)
+                  Align(
+                    alignment: Alignment.bottomRight,
+                    child: Container(
+                      margin: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(7),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: .55),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.fullscreen_rounded,
+                        color: Colors.white,
+                        size: 19,
+                      ),
+                    ),
+                  ),
+                if (_opening)
+                  ColoredBox(
+                    color: Colors.black.withValues(alpha: .16),
+                    child: const Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVideo(BuildContext context, ColorScheme colors) {
+    final controller = _videoController;
+    final ready = controller?.value.isInitialized == true;
+    final activeController = ready ? controller! : null;
+    final playing = activeController?.value.isPlaying == true;
+    final ratio =
+        activeController != null && activeController.value.aspectRatio > 0
+        ? activeController.value.aspectRatio.clamp(.75, 1.8).toDouble()
+        : 16 / 9;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 330),
+      child: AspectRatio(
+        aspectRatio: ratio,
+        child: Material(
+          clipBehavior: Clip.antiAlias,
+          color: Colors.black,
+          borderRadius: BorderRadius.circular(15),
+          child: InkWell(
+            onTap: _opening ? null : _open,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (activeController != null)
+                  VideoPlayer(activeController)
+                else if (_mediaError != null)
+                  _MediaLoadFailure(
+                    label: 'Videoni ochib bo‘lmadi',
+                    onRetry: _prepareMedia,
+                  )
+                else
+                  const Center(child: CircularProgressIndicator()),
+                if (activeController != null && !playing)
+                  const Center(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Color(0xA6000000),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Padding(
+                        padding: EdgeInsets.all(11),
+                        child: Icon(
+                          Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 34,
+                        ),
+                      ),
+                    ),
+                  ),
+                if (activeController != null)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: VideoProgressIndicator(
+                      activeController,
+                      allowScrubbing: true,
+                      padding: const EdgeInsets.only(top: 18),
+                      colors: VideoProgressColors(
+                        playedColor: colors.primary,
+                        bufferedColor: Colors.white38,
+                        backgroundColor: Colors.white24,
+                      ),
+                    ),
+                  ),
+                if (activeController != null)
+                  Positioned(
+                    right: 7,
+                    top: 7,
+                    child: IconButton.filledTonal(
+                      tooltip: 'To‘liq ekran',
+                      onPressed: _openVideoFullscreen,
+                      icon: const Icon(Icons.fullscreen_rounded, size: 20),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
+class _MediaLoadFailure extends StatelessWidget {
+  const _MediaLoadFailure({required this.label, required this.onRetry});
+
+  final String label;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.broken_image_outlined, color: Colors.white70),
+          const SizedBox(height: 6),
+          Text(label, style: const TextStyle(color: Colors.white70)),
+          TextButton(onPressed: onRetry, child: const Text('Qayta urinish')),
+        ],
+      ),
+    ),
+  );
+}
+
+class _ImageViewerScreen extends StatelessWidget {
+  const _ImageViewerScreen({required this.url, required this.name});
+
+  final String url;
+  final String name;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: Colors.black,
+    appBar: AppBar(
+      backgroundColor: Colors.black,
+      foregroundColor: Colors.white,
+      title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+    ),
+    body: Center(
+      child: InteractiveViewer(
+        minScale: .8,
+        maxScale: 5,
+        child: Image.network(
+          url,
+          fit: BoxFit.contain,
+          loadingBuilder: (context, child, progress) => progress == null
+              ? child
+              : const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                ),
+          errorBuilder: (_, _, _) => const _MediaLoadFailure(
+            label: 'Rasmni ochib bo‘lmadi',
+            onRetry: _noopMediaRetry,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+void _noopMediaRetry() {}
+
+class _VideoViewerScreen extends StatefulWidget {
+  const _VideoViewerScreen({required this.url, required this.name});
+
+  final String url;
+  final String name;
+
+  @override
+  State<_VideoViewerScreen> createState() => _VideoViewerScreenState();
+}
+
+class _VideoViewerScreenState extends State<_VideoViewerScreen> {
+  late final VideoPlayerController _controller =
+      VideoPlayerController.networkUrl(Uri.parse(widget.url));
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(() {
+      if (mounted) setState(() {});
+    });
+    unawaited(
+      _controller.initialize().then((_) => _controller.play()).catchError((
+        Object error,
+      ) {
+        if (mounted) setState(() => _error = error);
+      }),
+    );
+  }
+
+  @override
+  void dispose() {
+    unawaited(_controller.dispose());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ready = _controller.value.isInitialized;
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: Text(widget.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      ),
+      body: Center(
+        child: _error != null
+            ? const _MediaLoadFailure(
+                label: 'Videoni ochib bo‘lmadi',
+                onRetry: _noopMediaRetry,
+              )
+            : !ready
+            ? const CircularProgressIndicator(color: Colors.white)
+            : GestureDetector(
+                onTap: () => _controller.value.isPlaying
+                    ? _controller.pause()
+                    : _controller.play(),
+                child: AspectRatio(
+                  aspectRatio: _controller.value.aspectRatio,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      VideoPlayer(_controller),
+                      if (!_controller.value.isPlaying)
+                        const Icon(
+                          Icons.play_circle_fill_rounded,
+                          color: Colors.white,
+                          size: 64,
+                        ),
+                      Align(
+                        alignment: Alignment.bottomCenter,
+                        child: VideoProgressIndicator(
+                          _controller,
+                          allowScrubbing: true,
+                          padding: const EdgeInsets.only(top: 28),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+// Retained temporarily for compatibility with older golden-test harnesses.
+// ignore: unused_element
 class _NotificationsPortalPage extends StatelessWidget {
   const _NotificationsPortalPage();
 
@@ -7209,50 +11758,7 @@ class _NotificationsPortalPage extends StatelessWidget {
 PortalSection? _notificationDestination(
   Map<String, Object?> notification,
   PortalController portal,
-) {
-  final payload = <String, dynamic>{
-    for (final entry in notification.entries) entry.key: entry.value,
-  };
-  final nested = notification['data'] ?? notification['payload'];
-  if (nested is Map) {
-    for (final entry in nested.entries) {
-      payload['${entry.key}'] = entry.value;
-    }
-  }
-  final eventType = valueText(notification, const [
-    'event_type',
-    'type',
-  ], fallback: '');
-  if (eventType.isNotEmpty) payload.putIfAbsent('resource', () => eventType);
-  final route = notificationRouteFromPayload(payload);
-  return switch (route) {
-    'messages' when portal.can('messaging:read') => PortalSection.messages,
-    'assignments' when portal.can('assignments:read') =>
-      PortalSection.assignments,
-    'schedule' ||
-    'calendar' when portal.can('schedule:read') => PortalSection.schedule,
-    'attendance' when portal.can('attendance:read') => PortalSection.attendance,
-    'academics' ||
-    'grades' ||
-    'exams' when portal.can('academics:read') => PortalSection.academics,
-    'content' ||
-    'courses' ||
-    'materials' when portal.can('content:read') => PortalSection.content,
-    'ai' || 'assistant' when portal.can('ai:read') => PortalSection.ai,
-    'forms' when portal.can('forms:read') => PortalSection.forms,
-    'achievements' when portal.can('achievements:read') =>
-      PortalSection.achievements,
-    'discipline' ||
-    'rules' ||
-    'penalties' when portal.can('penalty:read') => PortalSection.discipline,
-    'finance' ||
-    'payments' when portal.can('finance:read_own') => PortalSection.finance,
-    'cards' || 'wallet' when portal.can('card:read') => PortalSection.cards,
-    'account' => PortalSection.account,
-    'students' || 'parents' || 'identity' => PortalSection.identity,
-    _ => null,
-  };
-}
+) => _completeNotificationDestination(notification, portal);
 
 class _NotificationPreferences extends StatefulWidget {
   const _NotificationPreferences({required this.rows});
@@ -7322,6 +11828,42 @@ class _NotificationPreferencesState extends State<_NotificationPreferences> {
   }
 }
 
+bool _formCanSubmit(Map<String, Object?> form) {
+  if (form['can_submit'] == false || '${form['status']}' != 'published') {
+    return false;
+  }
+  final now = DateTime.now();
+  final opens = DateTime.tryParse('${form['opens_at'] ?? ''}')?.toLocal();
+  final closes = DateTime.tryParse('${form['closes_at'] ?? ''}')?.toLocal();
+  if (opens != null && now.isBefore(opens)) return false;
+  if (closes != null && now.isAfter(closes)) return false;
+  if (form['allow_multiple'] != true &&
+      (valueInt(form['self_submitted_count']) ?? 0) > 0) {
+    return false;
+  }
+  return true;
+}
+
+String _formAvailability(Map<String, Object?> form) {
+  final submitted = valueInt(form['self_submitted_count']) ?? 0;
+  if (form['allow_multiple'] != true && submitted > 0) {
+    return 'Javob qabul qilingan: $submitted marta';
+  }
+  final now = DateTime.now();
+  final opens = DateTime.tryParse('${form['opens_at'] ?? ''}')?.toLocal();
+  final closes = DateTime.tryParse('${form['closes_at'] ?? ''}')?.toLocal();
+  if (opens != null && now.isBefore(opens)) {
+    return '${_dateLabel(opens.toIso8601String(), time: true)} da ochiladi';
+  }
+  if (closes != null && now.isAfter(closes)) {
+    return '${_dateLabel(closes.toIso8601String(), time: true)} da yopilgan';
+  }
+  if ('${form['status']}' != 'published') return 'Forma yopilgan';
+  return closes == null
+      ? 'Muddat belgilanmagan'
+      : '${_dateLabel(closes.toIso8601String(), time: true)} gacha ochiq';
+}
+
 class _FormsPortalPage extends StatelessWidget {
   const _FormsPortalPage();
 
@@ -7345,16 +11887,28 @@ class _FormsPortalPage extends StatelessWidget {
             icon: Icons.assignment_outlined,
             title: (row) => valueText(row, const ['title']),
             subtitle: (row) =>
-                '${valueText(row, const ['description'], fallback: 'Tavsifsiz')} · ${valueRows(row['form_fields']).length} savol',
-            trailing: (row) => const Icon(Icons.chevron_right_rounded),
-            onTap: (row) => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => PortalScope(
-                  controller: portal,
-                  child: _FormFillScreen(form: row),
-                ),
-              ),
+                '${valueText(row, const ['description'], fallback: 'Tavsifsiz')} · ${valueRows(row['form_fields']).length} savol\n${_formAvailability(row)}',
+            trailing: (row) => _StatusPill(
+              _formCanSubmit(row) ? 'Ochiq' : 'Yopilgan',
+              positive: _formCanSubmit(row),
+              warning: !_formCanSubmit(row),
             ),
+            onTap: (row) {
+              if (!_formCanSubmit(row)) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(_formAvailability(row))));
+                return;
+              }
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => PortalScope(
+                    controller: portal,
+                    child: _FormFillScreen(form: row),
+                  ),
+                ),
+              );
+            },
           ),
       ],
     );
@@ -7478,6 +12032,12 @@ class _FormFillScreenState extends State<_FormFillScreen> {
                   error: false,
                 ),
               ],
+              const SizedBox(height: 12),
+              _InlineMessage(
+                text:
+                    '${_formAvailability(widget.form)}\n${widget.form['allow_multiple'] == true ? 'Bir necha marta javob berish mumkin.' : 'Faqat bitta javob qabul qilinadi.'}',
+                error: false,
+              ),
               const SizedBox(height: 20),
               for (final field in fields) ...[
                 _FormFieldEditor(
@@ -7660,11 +12220,76 @@ class _AchievementsPortalPage extends StatelessWidget {
               .where((item) => valueInt(item['student']) == studentId)
               .toList()
         : portal.achievementGrants;
+    final catalog = portal.achievementCatalog
+        .where((item) => item['status'] == 'active')
+        .toList();
+    final earnedIds = rows
+        .map((item) => valueInt(item['achievement']))
+        .whereType<int>()
+        .toSet();
+    final completion = catalog.isEmpty
+        ? 0.0
+        : (earnedIds.length / catalog.length).clamp(0.0, 1.0);
     return _PortalPage(
       title: portal.isParent ? 'Farzand yutuqlari' : 'Mening yutuqlarim',
       subtitle: 'Markaz tasdiqlagan va o‘quvchiga berilgan yutuqlar devori.',
       section: PortalSection.achievements,
       children: [
+        _ResponsiveGrid(
+          children: [
+            _MetricCard(
+              label: 'Qo‘lga kiritilgan',
+              value: '${rows.length}',
+              icon: Icons.emoji_events_outlined,
+            ),
+            _MetricCard(
+              label: 'Mavjud yutuqlar',
+              value: '${catalog.length}',
+              icon: Icons.workspace_premium_outlined,
+            ),
+            _MetricCard(
+              label: 'To‘plam bajarilishi',
+              value: '${(completion * 100).round()}%',
+              icon: Icons.donut_large_rounded,
+            ),
+          ],
+        ),
+        if (catalog.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          _SectionCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'Yutuqlar yo‘li',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const Spacer(),
+                    Text('${earnedIds.length} / ${catalog.length}'),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                LinearProgressIndicator(
+                  value: completion,
+                  minHeight: 10,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  earnedIds.length == catalog.length
+                      ? 'Barcha mavjud yutuqlar qo‘lga kiritilgan.'
+                      : 'Qolgan yutuqlar va ularning shartlarini quyidagi katalogdan ko‘ring.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 24),
+        _PageSectionTitle(title: 'Yutuqlar devori', count: rows.length),
+        const SizedBox(height: 10),
         if (rows.isEmpty)
           const _EmptyState(
             icon: Icons.emoji_events_outlined,
@@ -7723,6 +12348,53 @@ class _AchievementsPortalPage extends StatelessWidget {
                             'Berilgan: ${_dateLabel(grant['granted_at'])}',
                             style: Theme.of(context).textTheme.labelSmall,
                           ),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed:
+                                  valueInt(
+                                        grant['achievement'] ?? detail['id'],
+                                      ) ==
+                                      null
+                                  ? null
+                                  : () async {
+                                      final id = valueInt(
+                                        grant['achievement'] ?? detail['id'],
+                                      )!;
+                                      final loaded = await _loadApiDetail(
+                                        context,
+                                        () => portal.loadAchievementDetail(id),
+                                      );
+                                      if (loaded == null || !context.mounted) {
+                                        return;
+                                      }
+                                      await _showJsonDetail(
+                                        context,
+                                        title: valueText(loaded, const [
+                                          'name',
+                                        ]),
+                                        fields: {
+                                          'Tavsif': valueText(loaded, const [
+                                            'description',
+                                          ]),
+                                          'Ko‘lam': valueText(loaded, const [
+                                            'scope',
+                                          ]),
+                                          'Berilgan': _dateLabel(
+                                            grant['granted_at'],
+                                            time: true,
+                                          ),
+                                          'Izoh': valueText(grant, const [
+                                            'note',
+                                          ]),
+                                        },
+                                        rawDetail: loaded,
+                                      );
+                                    },
+                              icon: const Icon(Icons.info_outline_rounded),
+                              label: const Text('Tafsilotlar'),
+                            ),
+                          ),
                         ],
                       ),
                     );
@@ -7730,6 +12402,124 @@ class _AchievementsPortalPage extends StatelessWidget {
                 ),
             ],
           ),
+        if (catalog.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          _PageSectionTitle(title: 'Yutuqlar katalogi', count: catalog.length),
+          const SizedBox(height: 10),
+          _ResponsiveGrid(
+            minWidth: 260,
+            children: [
+              for (final achievement in catalog)
+                Builder(
+                  builder: (context) {
+                    final id = valueInt(achievement['id']);
+                    final earned = id != null && earnedIds.contains(id);
+                    return _SectionCard(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          CircleAvatar(
+                            radius: 25,
+                            child: Text(
+                              valueText(achievement, const [
+                                'emoji',
+                              ], fallback: '🏆'),
+                              style: const TextStyle(fontSize: 24),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        valueText(achievement, const ['name']),
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleMedium,
+                                      ),
+                                    ),
+                                    _StatusPill(
+                                      earned ? 'Olingan' : 'Kutilmoqda',
+                                      positive: earned,
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  valueText(
+                                    achievement,
+                                    const ['description'],
+                                    fallback:
+                                        'Shartlar markaz tomonidan belgilanadi.',
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  achievement['scope'] == 'global'
+                                      ? 'Markaz bo‘yicha'
+                                      : 'Guruh yutug‘i',
+                                  style: Theme.of(context).textTheme.labelSmall,
+                                ),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton.icon(
+                                    onPressed: id == null
+                                        ? null
+                                        : () async {
+                                            final loaded = await _loadApiDetail(
+                                              context,
+                                              () => portal
+                                                  .loadAchievementDetail(id),
+                                            );
+                                            if (loaded == null ||
+                                                !context.mounted) {
+                                              return;
+                                            }
+                                            await _showJsonDetail(
+                                              context,
+                                              title: valueText(loaded, const [
+                                                'name',
+                                              ]),
+                                              fields: {
+                                                'Tavsif': valueText(
+                                                  loaded,
+                                                  const ['description'],
+                                                ),
+                                                'Ko‘lam': valueText(
+                                                  loaded,
+                                                  const ['scope'],
+                                                ),
+                                                'Holat': _statusLabel(
+                                                  '${loaded['status']}',
+                                                ),
+                                                'Natija': earned
+                                                    ? 'Qo‘lga kiritilgan'
+                                                    : 'Kutilmoqda',
+                                              },
+                                              rawDetail: loaded,
+                                            );
+                                          },
+                                    icon: const Icon(
+                                      Icons.info_outline_rounded,
+                                    ),
+                                    label: const Text('Tafsilotlar'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -7772,6 +12562,48 @@ class _DisciplinePortalPage extends StatelessWidget {
             ),
           ],
         ),
+        if (portal.pendingRules.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          const _InlineMessage(
+            text:
+                'Tasdiqlash kutilayotgan qoidalar bor. Har birini o‘qib, “Tanishdim” tugmasini bosing.',
+            error: false,
+          ),
+          const SizedBox(height: 10),
+          for (final rule in portal.pendingRules)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _SectionCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      valueText(rule, const ['title']),
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(valueText(rule, const ['body'])),
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: FilledButton.icon(
+                        onPressed: _withId(
+                          rule['id'],
+                          (id) => _runAction(
+                            context,
+                            () => portal.acknowledgeRule(id),
+                            success: 'Qoida bilan tanishganingiz tasdiqlandi.',
+                          ),
+                        ),
+                        icon: const Icon(Icons.verified_outlined),
+                        label: const Text('Tanishdim'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
         const SizedBox(height: 24),
         _PageSectionTitle(
           title: 'Menga tegishli qoidalar',
@@ -7865,6 +12697,761 @@ class _DisciplinePortalPage extends StatelessWidget {
   }
 }
 
+class _PlacementPortalPage extends StatelessWidget {
+  const _PlacementPortalPage();
+
+  @override
+  Widget build(BuildContext context) {
+    final portal = PortalScope.of(context);
+    if (!portal.isStudent) {
+      return const _PortalPage(
+        title: 'Daraja sinovi',
+        subtitle: 'Bu bo‘lim o‘quvchining shaxsiy sinov kabinetidir.',
+        section: PortalSection.placement,
+        children: [
+          _InlineMessage(
+            text:
+                'Ota-ona uchun daraja natijalari backendda xavfsiz guardian-scoping bilan ochilmaguncha bu sahifa so‘rov yubormaydi.',
+            error: false,
+          ),
+        ],
+      );
+    }
+    final attempts = portal.placementAttempts;
+    final completed = attempts
+        .where((item) => '${item['status'] ?? ''}' == 'graded')
+        .length;
+    final assigned = attempts.length - completed;
+    final percentages = attempts
+        .map(_placementPercent)
+        .whereType<double>()
+        .toList(growable: false);
+    final best = percentages.isEmpty
+        ? null
+        : percentages.reduce((left, right) => left > right ? left : right);
+
+    return _PortalPage(
+      title: portal.isParent ? 'Farzand daraja sinovlari' : 'Daraja sinovim',
+      subtitle: portal.isParent
+          ? 'Markaz ota-ona kabinetiga ochgan daraja sinovlari va natijalari.'
+          : 'Sizga biriktirilgan til darajasi sinovlari va ularning natijalari.',
+      section: PortalSection.placement,
+      children: [
+        _ResponsiveGrid(
+          children: [
+            _MetricCard(
+              label: 'Jami sinov',
+              value: '${attempts.length}',
+              icon: Icons.assignment_outlined,
+            ),
+            _MetricCard(
+              label: 'Topshirish kerak',
+              value: '$assigned',
+              icon: Icons.hourglass_top_rounded,
+            ),
+            _MetricCard(
+              label: 'Eng yaxshi natija',
+              value: best == null ? '—' : '${best.toStringAsFixed(0)}%',
+              icon: Icons.workspace_premium_outlined,
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _InlineMessage(
+          text: portal.isParent
+              ? 'Maxfiylik sabab faqat backend aynan shu ota-ona akkauntiga ruxsat bergan sinovlar ko‘rsatiladi.'
+              : 'Savollar faqat sizga biriktirilgan sinov ichidan olinadi. To‘g‘ri javob kalitlari ilovaga yuklanmaydi.',
+          error: false,
+        ),
+        const SizedBox(height: 24),
+        _PageSectionTitle(title: 'Sinovlar tarixi', count: attempts.length),
+        const SizedBox(height: 10),
+        if (attempts.isEmpty)
+          _EmptyState(
+            icon: Icons.psychology_alt_outlined,
+            title: portal.isParent
+                ? 'Ko‘rinadigan sinov yo‘q'
+                : 'Sinov biriktirilmagan',
+            message: portal.isParent
+                ? 'Markaz oilaviy ko‘rishga ruxsat bergan natijalar shu yerda paydo bo‘ladi.'
+                : 'Markaz sizga daraja sinovini biriktirganda u shu yerda paydo bo‘ladi.',
+          )
+        else
+          _SimpleRows(
+            rows: attempts,
+            icon: Icons.psychology_alt_outlined,
+            title: (row) =>
+                valueText(row, const ['test_title'], fallback: 'Daraja sinovi'),
+            subtitle: (row) {
+              final percent = _placementPercent(row);
+              final level = valueText(row, const ['level'], fallback: '—');
+              final date = row['submitted_at'] ?? row['expires_at'];
+              return [
+                if (percent != null) '${percent.toStringAsFixed(0)}%',
+                if (level != '—') 'Daraja: $level',
+                if (date != null)
+                  '${row['submitted_at'] != null ? 'Topshirildi' : 'Muddat'}: ${_dateLabel(date, time: true)}',
+              ].join(' · ');
+            },
+            trailing: (row) => _StatusPill(
+              _placementStatus('${row['status'] ?? ''}'),
+              positive: row['status'] == 'graded',
+              warning: row['status'] == 'assigned',
+            ),
+            onTap: (row) => _openPlacementAttempt(context, portal, row),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _openPlacementAttempt(
+    BuildContext context,
+    PortalController portal,
+    Map<String, Object?> row,
+  ) async {
+    final id = valueInt(row['id']);
+    if (id == null) return;
+    final loaded = await _loadApiDetail(
+      context,
+      () => portal.loadPlacementAttemptDetail(id),
+    );
+    if (loaded == null || !context.mounted) return;
+    final detail = {...row, ...loaded};
+    if ('${detail['status'] ?? ''}'.toLowerCase() == 'assigned' &&
+        portal.isStudent) {
+      final submitted = await Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
+          builder: (_) => PortalScope(
+            controller: portal,
+            child: _PlacementAttemptScreen(attempt: detail),
+          ),
+        ),
+      );
+      if (submitted == true && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Daraja sinovi topshirildi.')),
+        );
+      }
+      return;
+    }
+    final percent = _placementPercent(detail);
+    await _showJsonDetail(
+      context,
+      title: valueText(detail, const [
+        'test_title',
+      ], fallback: 'Daraja sinovi #$id'),
+      fields: {
+        'Holat': _placementStatus('${detail['status'] ?? ''}'),
+        'Natija': percent == null
+            ? 'Hali baholanmagan'
+            : '${detail['score'] ?? 0} / ${detail['max_score'] ?? 0} (${percent.toStringAsFixed(0)}%)',
+        'Aniqlangan daraja': valueText(detail, const [
+          'level',
+        ], fallback: 'Hali aniqlanmagan'),
+        'Biriktirilgan': _dateLabel(detail['created_at'], time: true),
+        'Oxirgi muddat': _dateLabel(detail['expires_at'], time: true),
+        'Topshirilgan': _dateLabel(detail['submitted_at'], time: true),
+        'Savollar va javoblar': _placementQuestionsLabel(detail),
+      },
+    );
+  }
+}
+
+class _PlacementAttemptScreen extends StatefulWidget {
+  const _PlacementAttemptScreen({required this.attempt});
+
+  final Map<String, Object?> attempt;
+
+  @override
+  State<_PlacementAttemptScreen> createState() =>
+      _PlacementAttemptScreenState();
+}
+
+class _PlacementAttemptScreenState extends State<_PlacementAttemptScreen> {
+  final Map<int, Object?> _answers = {};
+  final Map<int, TextEditingController> _controllers = {};
+  bool _busy = false;
+  String? _error;
+
+  List<Map<String, Object?>> get _questions =>
+      valueRows(widget.attempt['questions']);
+
+  DateTime? get _deadline =>
+      DateTime.tryParse('${widget.attempt['expires_at'] ?? ''}')?.toLocal();
+
+  bool get _expired => _deadline?.isBefore(DateTime.now()) ?? false;
+
+  @override
+  void initState() {
+    super.initState();
+    for (final answer in valueRows(widget.attempt['answers'])) {
+      final questionId = valueInt(answer['question']);
+      if (questionId != null) _answers[questionId] = answer['response'];
+    }
+    for (final question in _questions) {
+      final id = valueInt(question['id']);
+      if (id == null || _placementUsesChoiceControl(question)) continue;
+      final current = _answers[id];
+      _controllers[id] = TextEditingController(
+        text: current is String ? current : '',
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  Object? _answerFor(Map<String, Object?> question) {
+    final id = valueInt(question['id']);
+    if (id == null) return null;
+    final controller = _controllers[id];
+    return controller == null ? _answers[id] : controller.text.trim();
+  }
+
+  bool _isAnswered(Map<String, Object?> question) {
+    final answer = _answerFor(question);
+    return switch (answer) {
+      String value => value.trim().isNotEmpty,
+      List value => value.isNotEmpty,
+      bool _ => true,
+      _ => false,
+    };
+  }
+
+  int get _answeredCount => _questions.where(_isAnswered).length;
+
+  Future<void> _submit() async {
+    if (_busy) return;
+    if (_questions.isEmpty) {
+      setState(() => _error = 'Sinov savollari serverdan qaytmadi.');
+      return;
+    }
+    if (_expired) {
+      setState(() => _error = 'Sinov uchun ajratilgan vaqt tugagan.');
+      return;
+    }
+    final missing = _questions.where((question) => !_isAnswered(question));
+    if (missing.isNotEmpty) {
+      setState(
+        () => _error =
+            'Barcha savollarga javob bering. ${missing.length} ta javob qolgan.',
+      );
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Javoblarni yuboraymi?'),
+        content: const Text(
+          'Yuborilgandan keyin javoblarni o‘zgartirib bo‘lmaydi. Natija serverda hisoblanadi.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Tekshirib chiqish'),
+          ),
+          FilledButton(
+            key: const ValueKey('placement-confirm-submit'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Yuborish'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final attemptId = valueInt(widget.attempt['id']);
+    if (attemptId == null) {
+      setState(() => _error = 'Sinov identifikatori topilmadi.');
+      return;
+    }
+    final payload = <Map<String, Object?>>[
+      for (final question in _questions)
+        if (valueInt(question['id']) case final questionId?)
+          {'question': questionId, 'response': _answerFor(question)},
+    ];
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final result = await PortalScope.read(
+        context,
+      ).submitPlacementAttempt(attemptId, payload);
+      if (!mounted) return;
+      final percent = _placementPercent(result);
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          icon: const Icon(Icons.task_alt_rounded, size: 38),
+          title: const Text('Sinov topshirildi'),
+          content: Text(
+            percent == null
+                ? 'Javoblar qabul qilindi. Yozma yoki og‘zaki qismlar ustoz tomonidan tekshiriladi.'
+                : 'Natija: ${percent.toStringAsFixed(0)}%\nDaraja: ${valueText(result, const ['level'], fallback: 'aniqlanmoqda')}',
+          ),
+          actions: [
+            FilledButton(
+              key: const ValueKey('placement-result-close'),
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Natijani ko‘rish'),
+            ),
+          ],
+        ),
+      );
+      if (mounted) Navigator.pop(context, true);
+    } on Object catch (error) {
+      if (mounted) setState(() => _error = _errorText(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final title = valueText(widget.attempt, const [
+      'test_title',
+    ], fallback: 'Daraja sinovi');
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: SafeArea(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 820),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+              children: [
+                _SectionCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '$_answeredCount / ${_questions.length} ta savolga javob berildi',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 10),
+                      LinearProgressIndicator(
+                        value: _questions.isEmpty
+                            ? 0
+                            : _answeredCount / _questions.length,
+                        minHeight: 7,
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                      if (_deadline case final deadline?) ...[
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Icon(
+                              _expired
+                                  ? Icons.timer_off_outlined
+                                  : Icons.timer_outlined,
+                              size: 18,
+                              color: _expired ? colors.error : colors.primary,
+                            ),
+                            const SizedBox(width: 7),
+                            Expanded(
+                              child: Text(
+                                '${_expired ? 'Vaqt tugagan' : 'Oxirgi muddat'}: ${_dateLabel(deadline.toIso8601String(), time: true)}',
+                                style: TextStyle(
+                                  color: _expired
+                                      ? colors.error
+                                      : colors.onSurfaceVariant,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const _InlineMessage(
+                  text:
+                      'Javob kalitlari bu ekranga yuklanmaydi. Yuborishdan oldin barcha javoblarni tekshiring.',
+                  error: false,
+                ),
+                const SizedBox(height: 18),
+                if (_questions.isEmpty)
+                  const _EmptyState(
+                    icon: Icons.quiz_outlined,
+                    title: 'Savollar topilmadi',
+                    message: 'Markaz sinovni qayta biriktirishi kerak.',
+                  )
+                else
+                  for (final (index, question) in _questions.indexed) ...[
+                    _PlacementQuestionCard(
+                      index: index,
+                      question: question,
+                      answer: _answerFor(question),
+                      controller: _controllers[valueInt(question['id'])],
+                      enabled: !_busy && !_expired,
+                      onChanged: (value) {
+                        final id = valueInt(question['id']);
+                        if (id == null) return;
+                        setState(() {
+                          _answers[id] = value;
+                          _error = null;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                if (_error case final error?) ...[
+                  const SizedBox(height: 4),
+                  _InlineMessage(text: error, error: true),
+                ],
+                const SizedBox(height: 18),
+                FilledButton.icon(
+                  key: const ValueKey('placement-submit'),
+                  onPressed: _busy || _expired || _questions.isEmpty
+                      ? null
+                      : _submit,
+                  icon: _busy
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.send_rounded),
+                  label: Text(_busy ? 'Yuborilmoqda…' : 'Sinovni topshirish'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlacementQuestionCard extends StatelessWidget {
+  const _PlacementQuestionCard({
+    required this.index,
+    required this.question,
+    required this.answer,
+    required this.controller,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final int index;
+  final Map<String, Object?> question;
+  final Object? answer;
+  final TextEditingController? controller;
+  final bool enabled;
+  final ValueChanged<Object?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final id = valueInt(question['id']);
+    final type = '${question['question_type'] ?? ''}'.trim().toLowerCase();
+    final options = _placementOptionValues(question['options']);
+    final selected = answer is List
+        ? (answer! as List).map((item) => '$item').toSet()
+        : <String>{};
+    return _SectionCard(
+      child: Column(
+        key: id == null ? null : ValueKey('placement-question-$id'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _StatusPill('${index + 1}-SAVOL'),
+              _StatusPill('${question['points'] ?? 1} BALL', positive: true),
+              _StatusPill(_placementQuestionTypeLabel(type)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            valueText(question, const ['prompt'], fallback: 'Savol'),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          _PlacementQuestionMedia(media: valueMap(question['media'])),
+          const SizedBox(height: 14),
+          if (type == 'single_choice')
+            if (options.isEmpty)
+              const _InlineMessage(
+                text: 'Javob variantlari serverdan qaytmadi.',
+                error: true,
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final (optionIndex, option) in options.indexed)
+                    ChoiceChip(
+                      key: id == null
+                          ? null
+                          : ValueKey('placement-option-$id-$optionIndex'),
+                      label: Text(option),
+                      selected: answer == option,
+                      onSelected: enabled ? (_) => onChanged(option) : null,
+                    ),
+                ],
+              )
+          else if (type == 'multiple_choice')
+            if (options.isEmpty)
+              const _InlineMessage(
+                text: 'Javob variantlari serverdan qaytmadi.',
+                error: true,
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final (optionIndex, option) in options.indexed)
+                    FilterChip(
+                      key: id == null
+                          ? null
+                          : ValueKey('placement-option-$id-$optionIndex'),
+                      label: Text(option),
+                      selected: selected.contains(option),
+                      onSelected: enabled
+                          ? (checked) {
+                              final next = <String>{...selected};
+                              checked ? next.add(option) : next.remove(option);
+                              onChanged(next.toList(growable: false));
+                            }
+                          : null,
+                    ),
+                ],
+              )
+          else if (type == 'true_false')
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ChoiceChip(
+                  key: id == null
+                      ? null
+                      : ValueKey('placement-boolean-$id-true'),
+                  label: const Text('To‘g‘ri'),
+                  selected: answer == true,
+                  onSelected: enabled ? (_) => onChanged(true) : null,
+                ),
+                ChoiceChip(
+                  key: id == null
+                      ? null
+                      : ValueKey('placement-boolean-$id-false'),
+                  label: const Text('Noto‘g‘ri'),
+                  selected: answer == false,
+                  onSelected: enabled ? (_) => onChanged(false) : null,
+                ),
+              ],
+            )
+          else
+            TextField(
+              key: id == null ? null : ValueKey('placement-text-$id'),
+              controller: controller,
+              enabled: enabled,
+              minLines: type == 'short_answer' ? 1 : 4,
+              maxLines: type == 'short_answer' ? 2 : 10,
+              maxLength: type == 'short_answer' ? 500 : 10000,
+              onChanged: onChanged,
+              decoration: InputDecoration(
+                labelText: _placementAnswerLabel(type),
+                alignLabelWithHint: true,
+                helperText: type == 'speaking'
+                    ? 'Backend og‘zaki javob uchun audio kalit yoki havolani qabul qiladi.'
+                    : null,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlacementQuestionMedia extends StatelessWidget {
+  const _PlacementQuestionMedia({required this.media});
+
+  final Map<String, Object?> media;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = _firstAllowedPlacementMediaText(media);
+    final links = _allowedPlacementMediaLinks(media);
+    if (text == null && links.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (text != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(
+                  context,
+                ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: SelectableText(text),
+            ),
+          if (links.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final link in links)
+                  OutlinedButton.icon(
+                    onPressed: () => launchUrl(
+                      link.$2,
+                      mode: LaunchMode.externalApplication,
+                    ),
+                    icon: Icon(
+                      link.$1 == 'Audio' ? Icons.headphones : Icons.open_in_new,
+                    ),
+                    label: Text('${link.$1}ni ochish'),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+bool _placementUsesChoiceControl(Map<String, Object?> question) => const {
+  'single_choice',
+  'multiple_choice',
+  'true_false',
+}.contains('${question['question_type'] ?? ''}'.trim().toLowerCase());
+
+String _placementQuestionTypeLabel(String type) => switch (type) {
+  'single_choice' => 'BITTA VARIANT',
+  'multiple_choice' => 'BIR NECHA VARIANT',
+  'short_answer' => 'QISQA JAVOB',
+  'true_false' => 'TO‘G‘RI / NOTO‘G‘RI',
+  'writing' => 'YOZMA JAVOB',
+  'reading' => 'O‘QIB TUSHUNISH',
+  'listening' => 'TINGLAB TUSHUNISH',
+  'speaking' => 'OG‘ZAKI JAVOB',
+  _ => 'JAVOB',
+};
+
+String _placementAnswerLabel(String type) => switch (type) {
+  'short_answer' => 'Qisqa javob',
+  'reading' => 'Matn bo‘yicha javob',
+  'listening' => 'Eshitganingiz bo‘yicha javob',
+  'speaking' => 'Audio javob kaliti yoki havolasi',
+  _ => 'Javobingiz',
+};
+
+List<String> _placementOptionValues(Object? raw) {
+  if (raw is! Iterable) return const [];
+  final values = <String>[];
+  for (final item in raw) {
+    final value = _allowedPlacementOptionValue(item);
+    if (value != null && !values.contains(value)) values.add(value);
+  }
+  return values;
+}
+
+String? _allowedPlacementOptionValue(Object? raw) {
+  if (raw is String) {
+    final value = raw.trim();
+    return value.isEmpty ? null : value;
+  }
+  if (raw is num || raw is bool) return '$raw';
+  if (raw is Map) {
+    for (final key in const ['label', 'text', 'value', 'title', 'name']) {
+      final value = raw[key];
+      if (value is String && value.trim().isNotEmpty) return value.trim();
+      if (value is num || value is bool) return '$value';
+    }
+  }
+  return null;
+}
+
+String? _firstAllowedPlacementMediaText(Map<String, Object?> media) {
+  for (final key in const [
+    'passage',
+    'text',
+    'instruction',
+    'instructions',
+    'transcript',
+  ]) {
+    final value = media[key];
+    if (value is String && value.trim().isNotEmpty) return value.trim();
+  }
+  return null;
+}
+
+List<(String, Uri)> _allowedPlacementMediaLinks(Map<String, Object?> media) {
+  final links = <(String, Uri)>[];
+  for (final entry in const {
+    'audio_url': 'Audio',
+    'image_url': 'Rasm',
+    'file_url': 'Fayl',
+  }.entries) {
+    final raw = media[entry.key];
+    if (raw is! String) continue;
+    final uri = Uri.tryParse(raw.trim());
+    if (uri != null && (uri.scheme == 'https' || uri.scheme == 'http')) {
+      links.add((entry.value, uri));
+    }
+  }
+  return links;
+}
+
+double? _placementPercent(Map<String, Object?> row) {
+  final score = valueInt(row['score']);
+  final maxScore = valueInt(row['max_score']);
+  if (score == null || maxScore == null || maxScore <= 0) return null;
+  return (score / maxScore * 100).clamp(0, 100).toDouble();
+}
+
+String _placementStatus(String raw) => switch (raw.trim().toLowerCase()) {
+  'assigned' => 'TOPSHIRISH KERAK',
+  'graded' => 'BAHOLANGAN',
+  _ => raw.trim().isEmpty ? 'NOMA’LUM' : raw.trim().toUpperCase(),
+};
+
+String _placementQuestionsLabel(Map<String, Object?> attempt) {
+  final questions = valueRows(attempt['questions']);
+  final answers = valueRows(attempt['answers']);
+  if (questions.isEmpty) return 'Savol tafsilotlari berilmagan.';
+  return [
+    for (var index = 0; index < questions.length; index++)
+      () {
+        final question = questions[index];
+        final questionId = valueInt(question['id']);
+        final answer = answers
+            .where((item) => valueInt(item['question']) == questionId)
+            .firstOrNull;
+        final optionLabel = _placementOptionValues(
+          question['options'],
+        ).join(', ');
+        return '${index + 1}. ${valueText(question, const ['prompt'], fallback: 'Savol')}\n'
+            '${optionLabel.isEmpty ? '' : 'Variantlar: $optionLabel\n'}'
+            'Javob: ${answer == null ? 'Topshirilmagan' : _readable(answer['response'])}';
+      }(),
+  ].join('\n\n');
+}
+
 class _FinancePortalPage extends StatelessWidget {
   const _FinancePortalPage();
 
@@ -7885,7 +13472,7 @@ class _FinancePortalPage extends StatelessWidget {
           children: [
             _MetricCard(
               label: 'Jami qarzdorlik',
-              value: _money(portal.outstanding['outstanding_uzs']),
+              value: _money(context, portal.outstanding['outstanding_uzs']),
               icon: Icons.account_balance_wallet_outlined,
             ),
             _MetricCard(
@@ -7922,7 +13509,7 @@ class _FinancePortalPage extends StatelessWidget {
               'number',
             ], fallback: 'Hisob-faktura'),
             subtitle: (row) =>
-                '${valueText(row, const ['number'])} · muddat ${_dateLabel(row['due_date'])} · ${_money(row['total_uzs'])}',
+                '${valueText(row, const ['number'])} · muddat ${_dateLabel(row['due_date'])} · ${_money(context, row['total_uzs'])}',
             trailing: (row) => _StatusPill(
               valueText(row, const ['status']),
               positive: row['status'] == 'paid',
@@ -7938,11 +13525,20 @@ class _FinancePortalPage extends StatelessWidget {
                   'fee_schedule_name',
                 ], fallback: 'Ta’lim xizmati'),
                 'Davr': valueText(row, const ['period']),
-                'Summa': _money(row['total_uzs']),
+                'Summa': _money(context, row['total_uzs']),
+                'Valyuta': valueText(row, const ['currency']),
+                'USD qiymati': _money(
+                  context,
+                  row['total_usd'],
+                  sourceCurrency: PortalCurrency.usd,
+                ),
+                'Valyuta kursi': valueText(row, const ['fx_rate_usd']),
+                'Guruh': valueText(row, const ['cohort_name']),
                 'Holat': _statusLabel('${row['status']}'),
                 'Chiqarilgan': _dateLabel(row['issue_date']),
                 'Muddat': _dateLabel(row['due_date']),
-                'Qatorlar': _readable(row['lines']),
+                'Qatorlar': _invoiceLinesLabel(context, row['lines']),
+                'Ajratilgan to‘lovlar': _readable(row['allocations']),
               },
             ),
           ),
@@ -7978,7 +13574,7 @@ class _CardsPortalPage extends StatelessWidget {
           children: [
             _MetricCard(
               label: 'Hamyon balansi',
-              value: _money(walletData['balance_uzs']),
+              value: _money(context, walletData['balance_uzs']),
               icon: Icons.account_balance_wallet_outlined,
             ),
             _MetricCard(
@@ -8011,57 +13607,93 @@ class _CardsPortalPage extends StatelessWidget {
             minWidth: 280,
             children: [
               for (final card in portal.cards)
-                Container(
-                  height: 174,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Theme.of(context).colorScheme.primary,
-                        Theme.of(context).colorScheme.tertiary,
-                      ],
+                InkWell(
+                  borderRadius: BorderRadius.circular(24),
+                  onTap: valueInt(card['id']) == null
+                      ? null
+                      : () async {
+                          final id = valueInt(card['id'])!;
+                          final loaded = await _loadApiDetail(
+                            context,
+                            () => portal.loadCardDetail(id),
+                          );
+                          if (loaded == null || !context.mounted) return;
+                          final detail = {...card, ...loaded};
+                          await _showJsonDetail(
+                            context,
+                            title: typeName(detail['card_type']),
+                            fields: {
+                              'Kod': valueText(detail, const ['code']),
+                              'Holat': detail['is_active'] == true
+                                  ? 'Faol'
+                                  : 'Yopilgan',
+                              'Berilgan': _dateLabel(
+                                detail['issued_at'],
+                                time: true,
+                              ),
+                              'Bekor qilingan': _dateLabel(
+                                detail['revoked_at'],
+                                time: true,
+                              ),
+                              'Bekor qilish sababi': valueText(detail, const [
+                                'revoke_reason',
+                              ]),
+                            },
+                            rawDetail: loaded,
+                          );
+                        },
+                  child: Container(
+                    height: 174,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Theme.of(context).colorScheme.primary,
+                          Theme.of(context).colorScheme.tertiary,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(24),
                     ),
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: DefaultTextStyle(
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onPrimary,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.auto_awesome_rounded,
-                              color: Colors.white,
-                            ),
-                            const Spacer(),
-                            Text(
-                              card['is_active'] == true ? 'FAOL' : 'YOPILGAN',
-                            ),
-                          ],
-                        ),
-                        const Spacer(),
-                        Text(
-                          typeName(card['card_type']),
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                    child: DefaultTextStyle(
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimary,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.auto_awesome_rounded,
+                                color: Colors.white,
+                              ),
+                              const Spacer(),
+                              Text(
+                                card['is_active'] == true ? 'FAOL' : 'YOPILGAN',
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          valueText(card, const ['code']),
-                          style: const TextStyle(
-                            fontFamily: Sf.mono,
-                            fontSize: 20,
-                            letterSpacing: 2,
+                          const Spacer(),
+                          Text(
+                            typeName(card['card_type']),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text('Berilgan: ${_dateLabel(card['issued_at'])}'),
-                      ],
+                          const SizedBox(height: 8),
+                          Text(
+                            valueText(card, const ['code']),
+                            style: const TextStyle(
+                              fontFamily: Sf.mono,
+                              fontSize: 20,
+                              letterSpacing: 2,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text('Berilgan: ${_dateLabel(card['issued_at'])}'),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -8081,11 +13713,11 @@ class _CardsPortalPage extends StatelessWidget {
             rows: transactions,
             icon: Icons.payments_outlined,
             title: (row) =>
-                '${row['kind'] == 'credit' || row['kind'] == 'topup' ? '+' : '−'} ${_money(row['amount_uzs'])}',
+                '${row['kind'] == 'credit' || row['kind'] == 'topup' ? '+' : '−'} ${_money(context, row['amount_uzs'])}',
             subtitle: (row) =>
                 '${valueText(row, const ['note'], fallback: 'Hamyon operatsiyasi')} · ${_dateLabel(row['created_at'], time: true)}',
             trailing: (row) => Text(
-              _money(row['balance_after_uzs']),
+              _money(context, row['balance_after_uzs']),
               style: Theme.of(context).textTheme.labelMedium,
             ),
           ),
@@ -8100,48 +13732,1404 @@ class _AccountPortalPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final portal = PortalScope.of(context);
-    final app = AppScope.of(context);
     return _PortalPage(
-      title: 'Profil va xavfsizlik',
-      subtitle: 'Shaxsiy ma’lumotlar, qurilmalar, parol va ilova ko‘rinishi.',
+      title: _familyCopy(
+        context,
+        uz: 'Sozlamalar',
+        ru: 'Настройки',
+        en: 'Settings',
+      ),
+      subtitle: _familyCopy(
+        context,
+        uz: 'Akkaunt, ilova ko‘rinishi, xavfsizlik va maxfiylik.',
+        ru: 'Аккаунт, внешний вид, безопасность и конфиденциальность.',
+        en: 'Account, appearance, security, and privacy.',
+      ),
       section: PortalSection.account,
       children: [
         _SectionCard(child: _AccountIdentityHeader(portal: portal)),
-        const SizedBox(height: 24),
-        const _PageSectionTitle(title: 'Ilova ko‘rinishi'),
-        const SizedBox(height: 10),
+        const SizedBox(height: 18),
+        _AccountHubTile(
+          icon: Icons.person_outline_rounded,
+          color: Sf.primary,
+          title: _familyCopy(
+            context,
+            uz: 'Shaxsiy ma’lumotlar',
+            ru: 'Личные данные',
+            en: 'Personal information',
+          ),
+          subtitle: _familyCopy(
+            context,
+            uz: 'Profilni ko‘rish va tahrirlash',
+            ru: 'Просмотр и редактирование профиля',
+            en: 'View and edit your profile',
+          ),
+          onTap: () => _openAccountScreen(
+            context,
+            portal,
+            const _PersonalInformationScreen(),
+          ),
+        ),
+        const SizedBox(height: 9),
+        _AccountHubTile(
+          icon: Icons.palette_outlined,
+          color: Sf.accent,
+          title: _familyCopy(
+            context,
+            uz: 'Ilova ko‘rinishi va til',
+            ru: 'Внешний вид и язык',
+            en: 'Appearance and language',
+          ),
+          subtitle: _familyCopy(
+            context,
+            uz: 'Til, mavzu, ranglar va qulaylik',
+            ru: 'Язык, тема, цвета и доступность',
+            en: 'Language, theme, colors, and accessibility',
+          ),
+          onTap: () => _openAccountScreen(
+            context,
+            portal,
+            const _AppearanceSettingsScreen(),
+          ),
+        ),
+        const SizedBox(height: 9),
+        _AccountHubTile(
+          icon: Icons.notifications_none_rounded,
+          color: Sf.warn,
+          title: _familyCopy(
+            context,
+            uz: 'Bildirishnomalar',
+            ru: 'Уведомления',
+            en: 'Notifications',
+          ),
+          subtitle: _familyCopy(
+            context,
+            uz: 'Xabar kanallari va ogohlantirishlar',
+            ru: 'Каналы сообщений и оповещения',
+            en: 'Message channels and alerts',
+          ),
+          onTap: () =>
+              _PortalNavigationScope.go(context, PortalSection.notifications),
+        ),
+        const SizedBox(height: 9),
+        _AccountHubTile(
+          icon: Icons.shield_outlined,
+          color: Sf.success,
+          title: _familyCopy(
+            context,
+            uz: 'Xavfsizlik va sessiyalar',
+            ru: 'Безопасность и сеансы',
+            en: 'Security and sessions',
+          ),
+          subtitle: _familyCopy(
+            context,
+            uz: 'Parol va faol qurilmalar',
+            ru: 'Пароль и активные устройства',
+            en: 'Password and active devices',
+          ),
+          onTap: () => _openAccountScreen(
+            context,
+            portal,
+            const _SecuritySessionsScreen(),
+          ),
+        ),
+        const SizedBox(height: 9),
+        _AccountHubTile(
+          icon: Icons.privacy_tip_outlined,
+          color: Theme.of(context).colorScheme.secondary,
+          title: _familyCopy(
+            context,
+            uz: 'Maxfiylik siyosati',
+            ru: 'Политика конфиденциальности',
+            en: 'Privacy policy',
+          ),
+          subtitle: _familyCopy(
+            context,
+            uz: 'Ma’lumotlar qanday ishlatilishini biling',
+            ru: 'Как используются ваши данные',
+            en: 'Understand how your data is used',
+          ),
+          onTap: () =>
+              _openAccountScreen(context, portal, const _PrivacyPolicyScreen()),
+        ),
+        const SizedBox(height: 22),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Theme.of(context).colorScheme.error,
+            side: BorderSide(
+              color: Theme.of(context).colorScheme.error.withValues(alpha: .35),
+            ),
+          ),
+          onPressed: () => _confirmAccountLogout(context, portal),
+          icon: const Icon(Icons.logout_rounded),
+          label: Text(
+            _familyCopy(
+              context,
+              uz: 'Akkauntdan chiqish',
+              ru: 'Выйти из аккаунта',
+              en: 'Log out',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AccountHubTile extends StatelessWidget {
+  const _AccountHubTile({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => _SectionCard(
+    padding: EdgeInsets.zero,
+    child: ListTile(
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+      leading: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: .12),
+          borderRadius: BorderRadius.circular(13),
+        ),
+        child: Icon(icon, color: color),
+      ),
+      title: Text(title, style: Theme.of(context).textTheme.titleSmall),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.chevron_right_rounded),
+    ),
+  );
+}
+
+void _openAccountScreen(
+  BuildContext context,
+  PortalController portal,
+  Widget screen,
+) {
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => PortalScope(controller: portal, child: screen),
+    ),
+  );
+}
+
+class _PersonalInformationScreen extends StatelessWidget {
+  const _PersonalInformationScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    final portal = PortalScope.of(context);
+    final roleProfile = portal.isParent
+        ? portal.parentProfile
+        : portal.studentProfile;
+    final profile = <String, Object?>{...portal.profile, ...roleProfile};
+    String value(List<String> keys) => valueText(profile, keys, fallback: '');
+    final fields = <(IconData, String, String)>[
+      (
+        Icons.person_outline_rounded,
+        _familyCopy(
+          context,
+          uz: 'To‘liq ism',
+          ru: 'Полное имя',
+          en: 'Full name',
+        ),
+        value(const ['full_name']),
+      ),
+      (
+        Icons.alternate_email_rounded,
+        _familyCopy(context, uz: 'Login', ru: 'Логин', en: 'Username'),
+        value(const ['username']),
+      ),
+      (
+        Icons.phone_iphone_rounded,
+        _familyCopy(context, uz: 'Telefon', ru: 'Телефон', en: 'Phone'),
+        value(const ['phone']),
+      ),
+      (Icons.email_outlined, 'Email', value(const ['email'])),
+      (
+        Icons.cake_outlined,
+        _familyCopy(
+          context,
+          uz: 'Tug‘ilgan sana',
+          ru: 'Дата рождения',
+          en: 'Date of birth',
+        ),
+        _dateLabel(profile['birthdate']),
+      ),
+      (
+        Icons.location_on_outlined,
+        _familyCopy(context, uz: 'Hudud', ru: 'Регион', en: 'Region'),
+        value(const ['location', 'address']),
+      ),
+    ];
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          _familyCopy(
+            context,
+            uz: 'Shaxsiy ma’lumotlar',
+            ru: 'Личные данные',
+            en: 'Personal information',
+          ),
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () =>
+                _openAccountScreen(context, portal, const _ProfileEditScreen()),
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: Text(
+              _familyCopy(
+                context,
+                uz: 'Tahrirlash',
+                ru: 'Изменить',
+                en: 'Edit',
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+        ],
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _SectionCard(
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: [
+                      for (final field in fields)
+                        ListTile(
+                          leading: Icon(
+                            field.$1,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          title: Text(field.$2),
+                          subtitle: Text(
+                            _filled(field.$3)
+                                ? field.$3
+                                : _familyCopy(
+                                    context,
+                                    uz: 'Kiritilmagan',
+                                    ru: 'Не указано',
+                                    en: 'Not provided',
+                                  ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AppearanceSettingsScreen extends StatelessWidget {
+  const _AppearanceSettingsScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    final preferences = PortalScope.of(context).preferences;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          _familyCopy(
+            context,
+            uz: 'Ko‘rinish va til',
+            ru: 'Внешний вид и язык',
+            en: 'Appearance and language',
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 820),
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _ResponsiveGrid(
+                  minWidth: 230,
+                  children: [
+                    _PreferenceActionTile(
+                      key: const ValueKey('account-language-setting'),
+                      icon: Icons.language_rounded,
+                      label: _familyCopy(
+                        context,
+                        uz: 'Til',
+                        ru: 'Язык',
+                        en: 'Language',
+                      ),
+                      value: preferences.language.label,
+                      onTap: () => _showPortalChoiceSheet<PortalLanguage>(
+                        context,
+                        title: context.tr('language.choose'),
+                        selected: preferences.language,
+                        options: [
+                          for (final language in PortalLanguage.values)
+                            _PortalChoice(
+                              value: language,
+                              title: language.label,
+                              subtitle: language.code.toUpperCase(),
+                              icon: Icons.translate_rounded,
+                            ),
+                        ],
+                        onSelected: preferences.setLanguage,
+                      ),
+                    ),
+                    _PreferenceActionTile(
+                      key: const ValueKey('account-currency-setting'),
+                      icon: Icons.currency_exchange_rounded,
+                      label: _familyCopy(
+                        context,
+                        uz: 'Valyuta',
+                        ru: 'Валюта',
+                        en: 'Currency',
+                      ),
+                      value:
+                          '${preferences.currency.code} · ${preferences.currency.symbol}',
+                      onTap: () => _showPortalChoiceSheet<PortalCurrency>(
+                        context,
+                        title: _familyCopy(
+                          context,
+                          uz: 'Ko‘rsatish valyutasi',
+                          ru: 'Валюта отображения',
+                          en: 'Display currency',
+                        ),
+                        selected: preferences.currency,
+                        options: [
+                          for (final currency in PortalCurrency.values)
+                            _PortalChoice(
+                              value: currency,
+                              title: currency.code,
+                              subtitle: currency.symbol,
+                              icon: Icons.payments_outlined,
+                            ),
+                        ],
+                        onSelected: preferences.setCurrency,
+                      ),
+                    ),
+                    _PreferenceActionTile(
+                      key: const ValueKey('account-theme-setting'),
+                      icon: Icons.brightness_6_outlined,
+                      label: _familyCopy(
+                        context,
+                        uz: 'Mavzu',
+                        ru: 'Тема',
+                        en: 'Theme',
+                      ),
+                      value: _themePreferenceLabel(
+                        preferences.themePreference,
+                        preferences.language,
+                      ),
+                      onTap: () =>
+                          _showPortalChoiceSheet<PortalThemePreference>(
+                            context,
+                            title: _familyCopy(
+                              context,
+                              uz: 'Ilova mavzusi',
+                              ru: 'Тема приложения',
+                              en: 'App theme',
+                            ),
+                            selected: preferences.themePreference,
+                            options: [
+                              _PortalChoice(
+                                value: PortalThemePreference.system,
+                                title: _familyCopy(
+                                  context,
+                                  uz: 'Tizim bo‘yicha',
+                                  ru: 'Системная',
+                                  en: 'System',
+                                ),
+                                subtitle: _familyCopy(
+                                  context,
+                                  uz: 'Qurilma sozlamasiga mos',
+                                  ru: 'Как на устройстве',
+                                  en: 'Matches your device',
+                                ),
+                                icon: Icons.brightness_auto_rounded,
+                              ),
+                              _PortalChoice(
+                                value: PortalThemePreference.light,
+                                title: _familyCopy(
+                                  context,
+                                  uz: 'Yorug‘',
+                                  ru: 'Светлая',
+                                  en: 'Light',
+                                ),
+                                subtitle: _familyCopy(
+                                  context,
+                                  uz: 'Yorug‘ ko‘rinish',
+                                  ru: 'Светлое оформление',
+                                  en: 'Light appearance',
+                                ),
+                                icon: Icons.light_mode_outlined,
+                              ),
+                              _PortalChoice(
+                                value: PortalThemePreference.dark,
+                                title: _familyCopy(
+                                  context,
+                                  uz: 'Qorong‘i',
+                                  ru: 'Тёмная',
+                                  en: 'Dark',
+                                ),
+                                subtitle: _familyCopy(
+                                  context,
+                                  uz: 'Qorong‘i ko‘rinish',
+                                  ru: 'Тёмное оформление',
+                                  en: 'Dark appearance',
+                                ),
+                                icon: Icons.dark_mode_outlined,
+                              ),
+                            ],
+                            onSelected: preferences.setThemePreference,
+                          ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                _SectionCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        _familyCopy(
+                          context,
+                          uz: 'Rang palitrasi',
+                          ru: 'Цветовая палитра',
+                          en: 'Color palette',
+                        ),
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 10),
+                      _PortalPalettePicker(
+                        selected: preferences.paletteIndex,
+                        onSelected: preferences.setPaletteIndex,
+                      ),
+                      const SizedBox(height: 18),
+                      Text(
+                        _familyCopy(
+                          context,
+                          uz: 'Interfeys zichligi',
+                          ru: 'Плотность интерфейса',
+                          en: 'Interface density',
+                        ),
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      _PortalChoiceChips<PortalDensity>(
+                        selected: preferences.density,
+                        values: PortalDensity.values,
+                        label: (value) =>
+                            _densityLabel(value, preferences.language),
+                        onSelected: preferences.setDensity,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _SectionCard(
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: [
+                      SwitchListTile(
+                        secondary: const Icon(Icons.text_increase_rounded),
+                        title: Text(
+                          _familyCopy(
+                            context,
+                            uz: 'Katta matn',
+                            ru: 'Крупный текст',
+                            en: 'Large text',
+                          ),
+                        ),
+                        value: preferences.largeText,
+                        onChanged: preferences.setLargeText,
+                      ),
+                      SwitchListTile(
+                        secondary: const Icon(Icons.contrast_rounded),
+                        title: Text(
+                          _familyCopy(
+                            context,
+                            uz: 'Yuqori kontrast',
+                            ru: 'Высокий контраст',
+                            en: 'High contrast',
+                          ),
+                        ),
+                        value: preferences.highContrast,
+                        onChanged: preferences.setHighContrast,
+                      ),
+                      SwitchListTile(
+                        secondary: const Icon(Icons.motion_photos_off_outlined),
+                        title: Text(
+                          _familyCopy(
+                            context,
+                            uz: 'Animatsiyani kamaytirish',
+                            ru: 'Уменьшить анимацию',
+                            en: 'Reduce motion',
+                          ),
+                        ),
+                        value: preferences.reduceMotion,
+                        onChanged: preferences.setReduceMotion,
+                      ),
+                      SwitchListTile(
+                        secondary: const Icon(Icons.visibility_off_outlined),
+                        title: Text(
+                          _familyCopy(
+                            context,
+                            uz: 'Summalarni yashirish',
+                            ru: 'Скрывать суммы',
+                            en: 'Hide amounts',
+                          ),
+                        ),
+                        value: preferences.hideAmounts,
+                        onChanged: preferences.setHideAmounts,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SecuritySessionsScreen extends StatelessWidget {
+  const _SecuritySessionsScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    final portal = PortalScope.of(context);
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          _familyCopy(
+            context,
+            uz: 'Xavfsizlik va sessiyalar',
+            ru: 'Безопасность и сеансы',
+            en: 'Security and sessions',
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 820),
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _AccountHubTile(
+                  icon: Icons.password_rounded,
+                  color: Sf.primary,
+                  title: _familyCopy(
+                    context,
+                    uz: 'Parolni almashtirish',
+                    ru: 'Изменить пароль',
+                    en: 'Change password',
+                  ),
+                  subtitle: _familyCopy(
+                    context,
+                    uz: 'Akkauntingiz uchun yangi parol o‘rnating',
+                    ru: 'Установите новый пароль для аккаунта',
+                    en: 'Set a new password for your account',
+                  ),
+                  onTap: () => _openAccountScreen(
+                    context,
+                    portal,
+                    const _PasswordChangeScreen(),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                _PageSectionTitle(
+                  title: _familyCopy(
+                    context,
+                    uz: 'Faol qurilmalar',
+                    ru: 'Активные устройства',
+                    en: 'Active devices',
+                  ),
+                  count: portal.devices.length,
+                ),
+                const SizedBox(height: 9),
+                if (portal.devices.isEmpty)
+                  _EmptyState(
+                    icon: Icons.devices_other_outlined,
+                    title: _familyCopy(
+                      context,
+                      uz: 'Faol qurilma topilmadi',
+                      ru: 'Активные устройства не найдены',
+                      en: 'No active devices found',
+                    ),
+                    message: _familyCopy(
+                      context,
+                      uz: 'Yangi qurilma ro‘yxatdan o‘tganda uning sessiyasi shu yerda ko‘rinadi.',
+                      ru: 'Сессия появится здесь после регистрации нового устройства.',
+                      en: 'A session will appear here after a new device is registered.',
+                    ),
+                  )
+                else
+                  _SectionCard(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      children: [
+                        for (final device in portal.devices)
+                          ListTile(
+                            leading: const Icon(Icons.devices_outlined),
+                            title: Text(
+                              valueText(
+                                device,
+                                const ['name', 'platform'],
+                                fallback: _familyCopy(
+                                  context,
+                                  uz: 'Qurilma',
+                                  ru: 'Устройство',
+                                  en: 'Device',
+                                ),
+                              ),
+                            ),
+                            subtitle: Text(
+                              '${valueText(device, const ['platform'], fallback: '')} · ${_dateLabel(device['last_seen_at'], time: true)}',
+                            ),
+                            trailing: IconButton(
+                              tooltip: _familyCopy(
+                                context,
+                                uz: 'Sessiyani tugatish',
+                                ru: 'Завершить сеанс',
+                                en: 'End session',
+                              ),
+                              onPressed: _withId(
+                                device['id'],
+                                (id) =>
+                                    _confirmSessionRevoke(context, portal, id),
+                              ),
+                              icon: const Icon(Icons.logout_rounded),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PrivacyPolicyScreen extends StatelessWidget {
+  const _PrivacyPolicyScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    final sections = [
+      (
+        _familyCopy(
+          context,
+          uz: 'Qanday ma’lumotlar saqlanadi',
+          ru: 'Какие данные хранятся',
+          en: 'Information we store',
+        ),
+        _familyCopy(
+          context,
+          uz: 'Akkaunt, aloqa, o‘quv jarayoni, davomat, topshiriqlar, xabarlar va to‘lovga oid ma’lumotlar faqat xizmatni taqdim etish uchun ishlatiladi.',
+          ru: 'Данные аккаунта, контакты, обучение, посещаемость, задания, сообщения и платежи используются для предоставления сервиса.',
+          en: 'Account, contact, learning, attendance, assignment, message, and payment information is used to provide the service.',
+        ),
+      ),
+      (
+        _familyCopy(
+          context,
+          uz: 'Kim ko‘ra oladi',
+          ru: 'Кто имеет доступ',
+          en: 'Who can access it',
+        ),
+        _familyCopy(
+          context,
+          uz: 'Ma’lumotlar rol va ruxsatlar asosida o‘quvchi, rasmiy ota-ona hamda markazning vakolatli xodimlariga ko‘rsatiladi.',
+          ru: 'Доступ предоставляется ученику, официальному родителю и уполномоченным сотрудникам центра на основе ролей и разрешений.',
+          en: 'Access is limited by role and permission to the student, official parent, and authorized center staff.',
+        ),
+      ),
+      (
+        _familyCopy(
+          context,
+          uz: 'Xavfsizlik',
+          ru: 'Безопасность',
+          en: 'Security',
+        ),
+        _familyCopy(
+          context,
+          uz: 'Kirish sessiyalari himoyalanadi. Parolni hech kim bilan ulashmang va noma’lum qurilma sessiyasini darhol yakunlang.',
+          ru: 'Сеансы входа защищены. Не сообщайте пароль и завершайте незнакомые сеансы устройств.',
+          en: 'Sign-in sessions are protected. Never share your password and end any device session you do not recognize.',
+        ),
+      ),
+      (
+        _familyCopy(
+          context,
+          uz: 'Sizning huquqlaringiz',
+          ru: 'Ваши права',
+          en: 'Your choices',
+        ),
+        _familyCopy(
+          context,
+          uz: 'Noto‘g‘ri ma’lumotni tahrirlashingiz yoki o‘quv markazidan tuzatish, eksport va o‘chirish bo‘yicha yordam so‘rashingiz mumkin.',
+          ru: 'Вы можете исправить данные или обратиться в учебный центр за исправлением, экспортом или удалением.',
+          en: 'You can edit incorrect details or ask your learning center for help with correction, export, or deletion.',
+        ),
+      ),
+    ];
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          _familyCopy(
+            context,
+            uz: 'Maxfiylik siyosati',
+            ru: 'Политика конфиденциальности',
+            en: 'Privacy policy',
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: sections.length + 1,
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return _SectionCard(
+                    child: Row(
+                      children: [
+                        const Icon(Icons.privacy_tip_outlined, size: 30),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text(
+                            _familyCopy(
+                              context,
+                              uz: 'Starforge Family sizning oilaviy va o‘quv ma’lumotlaringizga ehtiyotkorlik bilan munosabatda bo‘ladi.',
+                              ru: 'Starforge Family бережно относится к учебным и семейным данным.',
+                              en: 'Starforge Family treats your family and learning information with care.',
+                            ),
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                final section = sections[index - 1];
+                return _SectionCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        section.$1,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 7),
+                      Text(
+                        section.$2,
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodyMedium?.copyWith(height: 1.55),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _confirmSessionRevoke(
+  BuildContext context,
+  PortalController portal,
+  int id,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(
+        _familyCopy(
+          context,
+          uz: 'Sessiyani tugatish',
+          ru: 'Завершить сеанс',
+          en: 'End session',
+        ),
+      ),
+      content: Text(
+        _familyCopy(
+          context,
+          uz: 'Tanlangan qurilma akkauntdan chiqariladi.',
+          ru: 'Выбранное устройство выйдет из аккаунта.',
+          en: 'The selected device will be signed out.',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: Text(
+            _familyCopy(
+              context,
+              uz: 'Bekor qilish',
+              ru: 'Отмена',
+              en: 'Cancel',
+            ),
+          ),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: Text(
+            _familyCopy(
+              context,
+              uz: 'Tugatish',
+              ru: 'Завершить',
+              en: 'End session',
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+  if (confirmed == true && context.mounted) {
+    await _runAction(
+      context,
+      () => portal.revokeDevice(id),
+      success: _familyCopy(
+        context,
+        uz: 'Sessiya tugatildi.',
+        ru: 'Сеанс завершён.',
+        en: 'Session ended.',
+      ),
+    );
+  }
+}
+
+Future<void> _confirmAccountLogout(
+  BuildContext context,
+  PortalController portal,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(
+        _familyCopy(
+          context,
+          uz: 'Akkauntdan chiqish',
+          ru: 'Выйти из аккаунта',
+          en: 'Log out',
+        ),
+      ),
+      content: Text(
+        _familyCopy(
+          context,
+          uz: 'Davom etsangiz, qayta kirish uchun login va parol kerak bo‘ladi.',
+          ru: 'Для повторного входа понадобятся логин и пароль.',
+          en: 'You will need your username and password to sign in again.',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: Text(
+            _familyCopy(
+              context,
+              uz: 'Bekor qilish',
+              ru: 'Отмена',
+              en: 'Cancel',
+            ),
+          ),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: Text(
+            _familyCopy(context, uz: 'Chiqish', ru: 'Выйти', en: 'Log out'),
+          ),
+        ),
+      ],
+    ),
+  );
+  if (confirmed == true) await portal.logout();
+}
+
+// Retained while older settings routes migrate to focused settings pages.
+// ignore: unused_element
+class _LegacyAccountPortalPage extends StatelessWidget {
+  const _LegacyAccountPortalPage();
+
+  @override
+  Widget build(BuildContext context) {
+    final portal = PortalScope.of(context);
+    final preferences = portal.preferences;
+    final compact = MediaQuery.sizeOf(context).width < 600;
+    return _PortalPage(
+      title: _familyCopy(
+        context,
+        uz: 'Profil va xavfsizlik',
+        ru: 'Профиль и безопасность',
+        en: 'Profile and security',
+      ),
+      subtitle: _familyCopy(
+        context,
+        uz: 'Shaxsiy ma’lumotlar, qurilmalar, parol va ilova ko‘rinishi.',
+        ru: 'Личные данные, устройства, пароль и внешний вид приложения.',
+        en: 'Personal details, devices, password and app appearance.',
+      ),
+      section: PortalSection.account,
+      children: [
+        _SectionCard(child: _AccountIdentityHeader(portal: portal)),
+        SizedBox(height: compact ? 14 : 24),
+        _PageSectionTitle(
+          title: _familyCopy(
+            context,
+            uz: 'Tezkor sozlamalar',
+            ru: 'Быстрые настройки',
+            en: 'Quick settings',
+          ),
+        ),
+        SizedBox(height: compact ? 8 : 10),
+        _ResponsiveGrid(
+          minWidth: compact ? 145 : 210,
+          children: [
+            _PreferenceActionTile(
+              key: const ValueKey('account-language-setting'),
+              icon: Icons.language_rounded,
+              label: _familyCopy(
+                context,
+                uz: 'Til',
+                ru: 'Язык',
+                en: 'Language',
+              ),
+              value: preferences.language.label,
+              onTap: () => _showPortalChoiceSheet<PortalLanguage>(
+                context,
+                title: context.tr('language.choose'),
+                selected: preferences.language,
+                options: [
+                  for (final language in PortalLanguage.values)
+                    _PortalChoice(
+                      value: language,
+                      title: language.label,
+                      subtitle: language.code.toUpperCase(),
+                      icon: Icons.translate_rounded,
+                    ),
+                ],
+                onSelected: preferences.setLanguage,
+              ),
+            ),
+            _PreferenceActionTile(
+              key: const ValueKey('account-currency-setting'),
+              icon: Icons.currency_exchange_rounded,
+              label: _familyCopy(
+                context,
+                uz: 'Valyuta',
+                ru: 'Валюта',
+                en: 'Currency',
+              ),
+              value:
+                  '${preferences.currency.code} · ${preferences.currency.symbol}',
+              onTap: () => _showPortalChoiceSheet<PortalCurrency>(
+                context,
+                title: _familyCopy(
+                  context,
+                  uz: 'Ko‘rsatish valyutasi',
+                  ru: 'Валюта отображения',
+                  en: 'Display currency',
+                ),
+                selected: preferences.currency,
+                options: [
+                  for (final currency in PortalCurrency.values)
+                    _PortalChoice(
+                      value: currency,
+                      title: currency.code,
+                      subtitle: currency.symbol,
+                      icon: Icons.payments_outlined,
+                    ),
+                ],
+                onSelected: preferences.setCurrency,
+              ),
+            ),
+            _PreferenceActionTile(
+              key: const ValueKey('account-theme-setting'),
+              icon: Icons.palette_outlined,
+              label: _familyCopy(context, uz: 'Mavzu', ru: 'Тема', en: 'Theme'),
+              value: _themePreferenceLabel(
+                preferences.themePreference,
+                preferences.language,
+              ),
+              onTap: () => _showPortalChoiceSheet<PortalThemePreference>(
+                context,
+                title: _familyCopy(
+                  context,
+                  uz: 'Ilova mavzusi',
+                  ru: 'Тема приложения',
+                  en: 'App theme',
+                ),
+                selected: preferences.themePreference,
+                options: [
+                  _PortalChoice(
+                    value: PortalThemePreference.system,
+                    title: _familyCopy(
+                      context,
+                      uz: 'Tizim bo‘yicha',
+                      ru: 'Системная',
+                      en: 'System',
+                    ),
+                    subtitle: _familyCopy(
+                      context,
+                      uz: 'Telefon sozlamasiga mos',
+                      ru: 'Как в настройках устройства',
+                      en: 'Matches device settings',
+                    ),
+                    icon: Icons.brightness_auto_rounded,
+                  ),
+                  _PortalChoice(
+                    value: PortalThemePreference.light,
+                    title: _familyCopy(
+                      context,
+                      uz: 'Yorug‘',
+                      ru: 'Светлая',
+                      en: 'Light',
+                    ),
+                    subtitle: _familyCopy(
+                      context,
+                      uz: 'Kunduzgi ko‘rinish',
+                      ru: 'Дневное оформление',
+                      en: 'Day appearance',
+                    ),
+                    icon: Icons.light_mode_outlined,
+                  ),
+                  _PortalChoice(
+                    value: PortalThemePreference.dark,
+                    title: _familyCopy(
+                      context,
+                      uz: 'Qorong‘i',
+                      ru: 'Тёмная',
+                      en: 'Dark',
+                    ),
+                    subtitle: _familyCopy(
+                      context,
+                      uz: 'Tungi ko‘rinish',
+                      ru: 'Ночное оформление',
+                      en: 'Night appearance',
+                    ),
+                    icon: Icons.dark_mode_outlined,
+                  ),
+                ],
+                onSelected: preferences.setThemePreference,
+              ),
+            ),
+            _PreferenceActionTile(
+              key: const ValueKey('account-notification-setting'),
+              icon: Icons.notifications_active_outlined,
+              label: _familyCopy(
+                context,
+                uz: 'Bildirishnomalar',
+                ru: 'Уведомления',
+                en: 'Notifications',
+              ),
+              value: portal.notificationPreferences.isEmpty
+                  ? 'Tizim sozlamasi'
+                  : '${portal.notificationPreferences.where((row) => row['enabled'] == true).length} ta kanal faol',
+              onTap: () => _PortalNavigationScope.go(
+                context,
+                PortalSection.notifications,
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: compact ? 14 : 24),
+        _PageSectionTitle(
+          title: _familyCopy(
+            context,
+            uz: 'Ilova ko‘rinishi',
+            ru: 'Внешний вид',
+            en: 'Appearance',
+          ),
+        ),
+        SizedBox(height: compact ? 8 : 10),
+        _SectionCard(
+          padding: EdgeInsets.all(compact ? 12 : 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                _familyCopy(
+                  context,
+                  uz: 'Rang palitrasi',
+                  ru: 'Цветовая палитра',
+                  en: 'Color palette',
+                ),
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 10),
+              _PortalPalettePicker(
+                selected: preferences.paletteIndex,
+                onSelected: preferences.setPaletteIndex,
+              ),
+              const SizedBox(height: 18),
+              Text(
+                _familyCopy(
+                  context,
+                  uz: 'Interfeys zichligi',
+                  ru: 'Плотность интерфейса',
+                  en: 'Interface density',
+                ),
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 8),
+              _PortalChoiceChips<PortalDensity>(
+                selected: preferences.density,
+                values: PortalDensity.values,
+                label: (value) => _densityLabel(value, preferences.language),
+                onSelected: preferences.setDensity,
+              ),
+              const SizedBox(height: 18),
+              Text(
+                _familyCopy(context, uz: 'Shrift', ru: 'Шрифт', en: 'Font'),
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 8),
+              _PortalChoiceChips<int>(
+                selected: preferences.fontIndex,
+                values: const [0, 1, 2],
+                label: (value) =>
+                    const ['Manrope', 'Instrument', 'JetBrains'][value],
+                onSelected: preferences.setFontIndex,
+              ),
+              const SizedBox(height: 18),
+              Text(
+                _familyCopy(
+                  context,
+                  uz: 'Fon naqshi',
+                  ru: 'Фоновый узор',
+                  en: 'Background pattern',
+                ),
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 8),
+              _PortalChoiceChips<PortalPattern>(
+                selected: preferences.pattern,
+                values: PortalPattern.values,
+                label: (value) => _patternLabel(value, preferences.language),
+                onSelected: preferences.setPattern,
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: compact ? 14 : 24),
+        _PageSectionTitle(
+          title: _familyCopy(
+            context,
+            uz: 'Qulaylik',
+            ru: 'Доступность',
+            en: 'Accessibility',
+          ),
+        ),
+        SizedBox(height: compact ? 8 : 10),
         _SectionCard(
           padding: EdgeInsets.zero,
           child: Column(
             children: [
               SwitchListTile(
-                secondary: const Icon(Icons.dark_mode_outlined),
-                title: const Text('Qorong‘i rejim'),
-                value: app.darkMode,
-                onChanged: app.setDarkMode,
-              ),
-              SwitchListTile(
+                dense: compact,
+                visualDensity: compact ? VisualDensity.compact : null,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: compact ? 12 : 16,
+                ),
                 secondary: const Icon(Icons.text_increase_rounded),
-                title: const Text('Katta matn'),
-                value: app.largeText,
-                onChanged: app.setLargeText,
+                title: Text(
+                  _familyCopy(
+                    context,
+                    uz: 'Katta matn',
+                    ru: 'Крупный текст',
+                    en: 'Large text',
+                  ),
+                ),
+                value: preferences.largeText,
+                onChanged: preferences.setLargeText,
               ),
               SwitchListTile(
+                dense: compact,
+                visualDensity: compact ? VisualDensity.compact : null,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: compact ? 12 : 16,
+                ),
                 secondary: const Icon(Icons.contrast_rounded),
-                title: const Text('Yuqori kontrast'),
-                value: app.highContrast,
-                onChanged: app.setHighContrast,
+                title: Text(
+                  _familyCopy(
+                    context,
+                    uz: 'Yuqori kontrast',
+                    ru: 'Высокий контраст',
+                    en: 'High contrast',
+                  ),
+                ),
+                value: preferences.highContrast,
+                onChanged: preferences.setHighContrast,
               ),
               SwitchListTile(
+                dense: compact,
+                visualDensity: compact ? VisualDensity.compact : null,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: compact ? 12 : 16,
+                ),
                 secondary: const Icon(Icons.motion_photos_off_outlined),
-                title: const Text('Animatsiyani kamaytirish'),
-                value: app.reduceMotion,
-                onChanged: app.setReduceMotion,
+                title: Text(
+                  _familyCopy(
+                    context,
+                    uz: 'Animatsiyani kamaytirish',
+                    ru: 'Уменьшить анимацию',
+                    en: 'Reduce motion',
+                  ),
+                ),
+                value: preferences.reduceMotion,
+                onChanged: preferences.setReduceMotion,
+              ),
+              SwitchListTile(
+                dense: compact,
+                visualDensity: compact ? VisualDensity.compact : null,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: compact ? 12 : 16,
+                ),
+                secondary: const Icon(Icons.visibility_off_outlined),
+                title: Text(
+                  _familyCopy(
+                    context,
+                    uz: 'Summalarni yashirish',
+                    ru: 'Скрывать суммы',
+                    en: 'Hide amounts',
+                  ),
+                ),
+                subtitle: Text(
+                  _familyCopy(
+                    context,
+                    uz: 'Moliyaviy ma’lumotni ko‘zlardan himoyalash',
+                    ru: 'Скрывает финансовые данные от посторонних',
+                    en: 'Keeps financial data away from onlookers',
+                  ),
+                ),
+                value: preferences.hideAmounts,
+                onChanged: preferences.setHideAmounts,
               ),
             ],
           ),
         ),
-        const SizedBox(height: 24),
+        SizedBox(height: compact ? 14 : 24),
+        _PageSectionTitle(
+          title: _familyCopy(
+            context,
+            uz: 'Chat ko‘rinishi',
+            ru: 'Оформление чата',
+            en: 'Chat appearance',
+          ),
+        ),
+        SizedBox(height: compact ? 8 : 10),
+        _SectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _CompactPreferenceRow(
+                icon: Icons.chat_bubble_outline_rounded,
+                title: _familyCopy(
+                  context,
+                  uz: 'Xabarlar uslubi',
+                  ru: 'Стиль сообщений',
+                  en: 'Message style',
+                ),
+                value: _chatStyleLabel(preferences.chatStyle),
+                onTap: () => _showPortalChoiceSheet<PortalChatStyle>(
+                  context,
+                  title: _familyCopy(
+                    context,
+                    uz: 'Chat uslubini tanlang',
+                    ru: 'Выберите стиль чата',
+                    en: 'Choose chat style',
+                  ),
+                  selected: preferences.chatStyle,
+                  options: [
+                    for (final style in PortalChatStyle.values)
+                      _PortalChoice(
+                        value: style,
+                        title: _chatStyleLabel(style),
+                        subtitle: _familyCopy(
+                          context,
+                          uz: 'Xabar pufakchalari va ranglar',
+                          ru: 'Пузырьки сообщений и цвета',
+                          en: 'Message bubbles and colors',
+                        ),
+                        icon: Icons.forum_outlined,
+                      ),
+                  ],
+                  onSelected: preferences.setChatStyle,
+                ),
+              ),
+              const Divider(height: 22),
+              _CompactPreferenceRow(
+                icon: Icons.wallpaper_rounded,
+                title: _familyCopy(
+                  context,
+                  uz: 'Chat foni',
+                  ru: 'Фон чата',
+                  en: 'Chat background',
+                ),
+                value: _chatWallpaperLabel(preferences.chatWallpaper),
+                onTap: () => _showPortalChoiceSheet<PortalChatWallpaper>(
+                  context,
+                  title: _familyCopy(
+                    context,
+                    uz: 'Chat fonini tanlang',
+                    ru: 'Выберите фон чата',
+                    en: 'Choose chat background',
+                  ),
+                  selected: preferences.chatWallpaper,
+                  options: [
+                    for (final wallpaper in PortalChatWallpaper.values)
+                      _PortalChoice(
+                        value: wallpaper,
+                        title: _chatWallpaperLabel(wallpaper),
+                        subtitle: _familyCopy(
+                          context,
+                          uz: 'Suhbatlar uchun alohida fon',
+                          ru: 'Отдельный фон для переписки',
+                          en: 'A separate background for conversations',
+                        ),
+                        icon: Icons.image_outlined,
+                      ),
+                  ],
+                  onSelected: preferences.setChatWallpaper,
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: compact ? 14 : 24),
         Row(
           children: [
             const Expanded(child: _PageSectionTitle(title: 'Faol qurilmalar')),
@@ -8159,7 +15147,7 @@ class _AccountPortalPage extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        SizedBox(height: compact ? 8 : 10),
         if (portal.devices.isEmpty)
           const _EmptyState(
             icon: Icons.devices_other_outlined,
@@ -8175,7 +15163,7 @@ class _AccountPortalPage extends StatelessWidget {
               'platform',
             ], fallback: 'Faol qurilma'),
             subtitle: (row) =>
-                '${valueText(row, const ['platform'])} · oxirgi faollik ${_dateLabel(row['last_seen_at'], time: true)}',
+                '${valueText(row, const ['platform'])} · ${valueText(row, const ['user_agent'], fallback: 'Qurilma tavsifi yo‘q')}\nOxirgi faollik: ${_dateLabel(row['last_seen_at'], time: true)}',
             trailing: (row) => IconButton(
               tooltip: 'Qurilmani chiqarish',
               onPressed: _withId(
@@ -8184,8 +15172,25 @@ class _AccountPortalPage extends StatelessWidget {
               ),
               icon: const Icon(Icons.logout_rounded),
             ),
+            onTap: (row) => _showJsonDetail(
+              context,
+              title: valueText(row, const [
+                'name',
+                'platform',
+              ], fallback: 'Qurilma'),
+              fields: {
+                'Platforma': valueText(row, const ['platform']),
+                'Qurilma ID': valueText(row, const ['device_id']),
+                'User agent': valueText(row, const ['user_agent']),
+                'Push holati': _filled(row['push_token'])
+                    ? 'Ulangan'
+                    : 'Ulanmagan',
+                'Oxirgi faollik': _dateLabel(row['last_seen_at'], time: true),
+                'Bekor qilingan': _dateLabel(row['revoked_at'], time: true),
+              },
+            ),
           ),
-        const SizedBox(height: 24),
+        SizedBox(height: compact ? 14 : 24),
         _SectionCard(
           padding: EdgeInsets.zero,
           child: Column(
@@ -8203,17 +15208,28 @@ class _AccountPortalPage extends StatelessWidget {
                     portal.baseUrl,
                     style: const TextStyle(fontFamily: Sf.mono, fontSize: 12),
                   ),
+                  const SizedBox(height: 12),
+                  _TechnicalProfileRows(profile: portal.profile),
                 ],
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: portal.logout,
-                    icon: const Icon(Icons.logout_rounded),
-                    label: const Text('Akkauntdan chiqish'),
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          _confirmPreferenceReset(context, preferences.reset),
+                      icon: const Icon(Icons.restart_alt_rounded),
+                      label: const Text('Ko‘rinish sozlamalarini tiklash'),
+                    ),
+                    const SizedBox(height: 9),
+                    OutlinedButton.icon(
+                      onPressed: portal.logout,
+                      icon: const Icon(Icons.logout_rounded),
+                      label: const Text('Akkauntdan chiqish'),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -8255,6 +15271,379 @@ class _AccountPortalPage extends StatelessWidget {
   }
 }
 
+class _PortalChoice<T> {
+  const _PortalChoice({
+    required this.value,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+  });
+
+  final T value;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+}
+
+Future<void> _showPortalChoiceSheet<T>(
+  BuildContext context, {
+  required String title,
+  required T selected,
+  required List<_PortalChoice<T>> options,
+  required ValueChanged<T> onSelected,
+}) async {
+  final value = await showModalBottomSheet<T>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (sheetContext) => SafeArea(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 620),
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+          children: [
+            Text(title, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 10),
+            for (final option in options)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 7),
+                child: Material(
+                  color: option.value == selected
+                      ? Theme.of(context).colorScheme.primaryContainer
+                      : Theme.of(context).colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(13),
+                  child: ListTile(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    leading: Icon(option.icon),
+                    title: Text(option.title),
+                    subtitle: Text(option.subtitle),
+                    trailing: option.value == selected
+                        ? const Icon(Icons.check_circle_rounded)
+                        : const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.pop(sheetContext, option.value),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
+  if (value != null) onSelected(value);
+}
+
+Future<void> _confirmPreferenceReset(
+  BuildContext context,
+  VoidCallback reset,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Sozlamalarni tiklash'),
+      content: const Text(
+        'Til, ranglar, zichlik, chat ko‘rinishi va qulaylik sozlamalari boshlang‘ich holatga qaytadi.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('Bekor qilish'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: const Text('Tiklash'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed == true) reset();
+}
+
+class _PreferenceActionTile extends StatelessWidget {
+  const _PreferenceActionTile({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return _SectionCard(
+      padding: EdgeInsets.zero,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(13),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: colors.primaryContainer,
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(icon, size: 19, color: colors.primary),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label.toUpperCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Sf.eyebrow(color: colors.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      value,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 19,
+                color: colors.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactPreferenceRow extends StatelessWidget {
+  const _CompactPreferenceRow({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(10),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Icon(icon, size: 21),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.labelLarge),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded),
+        ],
+      ),
+    ),
+  );
+}
+
+class _PortalChoiceChips<T> extends StatelessWidget {
+  const _PortalChoiceChips({
+    required this.selected,
+    required this.values,
+    required this.label,
+    required this.onSelected,
+  });
+
+  final T selected;
+  final List<T> values;
+  final String Function(T) label;
+  final ValueChanged<T> onSelected;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: 7,
+    runSpacing: 7,
+    children: [
+      for (final value in values)
+        ChoiceChip(
+          label: Text(label(value)),
+          selected: value == selected,
+          onSelected: (_) => onSelected(value),
+        ),
+    ],
+  );
+}
+
+class _PortalPalettePicker extends StatelessWidget {
+  const _PortalPalettePicker({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final int selected;
+  final ValueChanged<int> onSelected;
+
+  static const colors = <Color>[
+    Color(0xFF4F6A3A),
+    Color(0xFF1F6B66),
+    Color(0xFF2A3D8F),
+    Color(0xFFB85535),
+    Color(0xFFC2410C),
+    Color(0xFF0E7C5A),
+    Color(0xFFB3122F),
+    Color(0xFF2563A8),
+    Color(0xFFB8791C),
+    Color(0xFF2B2A26),
+  ];
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: 9,
+    runSpacing: 9,
+    children: [
+      for (var index = 0; index < colors.length; index++)
+        Semantics(
+          button: true,
+          selected: selected == index,
+          label: 'Palitra ${index + 1}',
+          child: InkWell(
+            key: ValueKey('portal-palette-$index'),
+            onTap: () => onSelected(index),
+            borderRadius: BorderRadius.circular(12),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              width: 43,
+              height: 43,
+              decoration: BoxDecoration(
+                color: colors[index],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: selected == index
+                      ? Theme.of(context).colorScheme.onSurface
+                      : Colors.transparent,
+                  width: 2.5,
+                ),
+              ),
+              child: selected == index
+                  ? const Icon(Icons.check_rounded, color: Colors.white)
+                  : null,
+            ),
+          ),
+        ),
+    ],
+  );
+}
+
+String _familyCopy(
+  BuildContext context, {
+  required String uz,
+  required String ru,
+  required String en,
+}) => switch (PortalScope.of(context).preferences.language) {
+  PortalLanguage.uz => uz,
+  PortalLanguage.ru => ru,
+  PortalLanguage.en => en,
+};
+
+String _themePreferenceLabel(
+  PortalThemePreference value,
+  PortalLanguage language,
+) => switch ((value, language)) {
+  (PortalThemePreference.system, PortalLanguage.ru) => 'Системная',
+  (PortalThemePreference.system, PortalLanguage.en) => 'System',
+  (PortalThemePreference.light, PortalLanguage.ru) => 'Светлая',
+  (PortalThemePreference.light, PortalLanguage.en) => 'Light',
+  (PortalThemePreference.dark, PortalLanguage.ru) => 'Тёмная',
+  (PortalThemePreference.dark, PortalLanguage.en) => 'Dark',
+  (PortalThemePreference.system, _) => 'Tizim bo‘yicha',
+  (PortalThemePreference.light, _) => 'Yorug‘',
+  (PortalThemePreference.dark, _) => 'Qorong‘i',
+};
+
+String _densityLabel(PortalDensity value, PortalLanguage language) =>
+    switch ((value, language)) {
+      (PortalDensity.compact, PortalLanguage.ru) => 'Компактно',
+      (PortalDensity.compact, PortalLanguage.en) => 'Compact',
+      (PortalDensity.standard, PortalLanguage.ru) => 'Обычно',
+      (PortalDensity.standard, PortalLanguage.en) => 'Standard',
+      (PortalDensity.comfortable, PortalLanguage.ru) => 'Свободно',
+      (PortalDensity.comfortable, PortalLanguage.en) => 'Comfortable',
+      (PortalDensity.compact, _) => 'Ixcham',
+      (PortalDensity.standard, _) => 'O‘rta',
+      (PortalDensity.comfortable, _) => 'Keng',
+    };
+
+String _patternLabel(PortalPattern value, PortalLanguage language) =>
+    switch ((value, language)) {
+      (PortalPattern.none, PortalLanguage.ru) => 'Без узора',
+      (PortalPattern.none, PortalLanguage.en) => 'None',
+      (PortalPattern.dots, PortalLanguage.ru) => 'Точки',
+      (PortalPattern.dots, PortalLanguage.en) => 'Dots',
+      (PortalPattern.grid, PortalLanguage.ru) => 'Сетка',
+      (PortalPattern.grid, PortalLanguage.en) => 'Grid',
+      (PortalPattern.tile, PortalLanguage.ru) => 'Плитка',
+      (PortalPattern.tile, PortalLanguage.en) => 'Tile',
+      (PortalPattern.topo, PortalLanguage.ru) => 'Топография',
+      (PortalPattern.topo, PortalLanguage.en) => 'Topo',
+      (PortalPattern.none, _) => 'Toza',
+      (PortalPattern.dots, _) => 'Nuqtalar',
+      (PortalPattern.grid, _) => 'To‘r',
+      (PortalPattern.tile, _) => 'Koshin',
+      (PortalPattern.topo, _) => 'Xarita',
+    };
+
+String _chatStyleLabel(PortalChatStyle value) => switch (value) {
+  PortalChatStyle.telegram => 'Telegram',
+  PortalChatStyle.whatsapp => 'WhatsApp',
+  PortalChatStyle.modernDark => 'Modern Dark',
+  PortalChatStyle.glass => 'Glass',
+  PortalChatStyle.gradient => 'Gradient',
+  PortalChatStyle.minimal => 'Minimal',
+  PortalChatStyle.neon => 'Neon',
+  PortalChatStyle.nature => 'Nature',
+};
+
+String _chatWallpaperLabel(PortalChatWallpaper value) => switch (value) {
+  PortalChatWallpaper.telegramClouds => 'Telegram Clouds',
+  PortalChatWallpaper.whatsappPattern => 'WhatsApp Pattern',
+  PortalChatWallpaper.mountains => 'Mountains',
+  PortalChatWallpaper.aurora => 'Aurora',
+  PortalChatWallpaper.space => 'Space',
+  PortalChatWallpaper.ocean => 'Ocean',
+  PortalChatWallpaper.sakura => 'Sakura',
+  PortalChatWallpaper.abstract => 'Abstract',
+  PortalChatWallpaper.gradient => 'Gradient',
+  PortalChatWallpaper.blur => 'Blur',
+};
+
 class _AccountIdentityHeader extends StatelessWidget {
   const _AccountIdentityHeader({required this.portal});
 
@@ -8262,23 +15651,123 @@ class _AccountIdentityHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final avatar = CircleAvatar(
-      radius: 30,
-      child: Text(_initials(portal.displayName)),
+    final compact = MediaQuery.sizeOf(context).width < 600;
+    final colors = Theme.of(context).colorScheme;
+    final roleProfile = portal.isParent
+        ? portal.parentProfile
+        : portal.studentProfile;
+    final identity = roleProfile.isEmpty ? portal.profile : roleProfile;
+    final roleLabel = portal.isParent
+        ? context.tr('role.parent')
+        : context.tr('role.student');
+    final username = valueText(
+      portal.profile,
+      const ['username'],
+      fallback: _familyCopy(
+        context,
+        uz: 'Akkaunt',
+        ru: 'Аккаунт',
+        en: 'Account',
+      ),
+    );
+    final branch = valueText(identity, const [
+      'branch_name',
+      'branch',
+    ], fallback: _familyCopy(context, uz: 'Markaz', ru: 'Центр', en: 'Center'));
+    final cohort = valueText(
+      identity,
+      const [
+        'current_cohort_name',
+        'cohort_name',
+        'group_name',
+        'academic_level',
+      ],
+      fallback: portal.isParent
+          ? _familyCopy(
+              context,
+              uz: '${portal.children.length} farzand',
+              ru: 'Детей: ${portal.children.length}',
+              en: 'Children: ${portal.children.length}',
+            )
+          : _familyCopy(context, uz: 'Guruh', ru: 'Группа', en: 'Group'),
+    );
+    final contact = valueText(
+      identity,
+      const ['phone', 'email'],
+      fallback: valueText(portal.profile, const [
+        'phone',
+        'email',
+      ], fallback: 'Aloqa ma’lumoti yo‘q'),
+    );
+    final avatar = Container(
+      width: compact ? 62 : 76,
+      height: compact ? 62 : 76,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: colors.primaryContainer,
+        shape: BoxShape.circle,
+        border: Border.all(color: colors.surface, width: 3),
+        boxShadow: Sf.shadowMd,
+      ),
+      child: Text(
+        _initials(portal.displayName),
+        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+          color: colors.onPrimaryContainer,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
     );
     final details = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(portal.displayName, style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 4),
-        Text(
-          '${portal.isParent ? 'Ota-ona' : 'O‘quvchi'} · ${valueText(portal.profile, const ['username'])}',
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+          decoration: BoxDecoration(
+            color: colors.secondaryContainer,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            roleLabel.toUpperCase(),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: colors.onSecondaryContainer,
+              fontWeight: FontWeight.w900,
+              letterSpacing: .7,
+            ),
+          ),
         ),
+        const SizedBox(height: 8),
         Text(
-          valueText(portal.profile, const [
-            'phone',
-            'email',
-          ], fallback: 'Aloqa ma’lumoti yo‘q'),
+          portal.displayName,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style:
+              (compact
+                      ? Theme.of(context).textTheme.titleLarge
+                      : Theme.of(context).textTheme.headlineSmall)
+                  ?.copyWith(fontWeight: FontWeight.w900, height: 1.05),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          '$username · $contact',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 7,
+          runSpacing: 7,
+          children: [
+            _AccountMetaChip(icon: Icons.apartment_rounded, label: branch),
+            _AccountMetaChip(
+              icon: portal.isParent
+                  ? Icons.family_restroom_rounded
+                  : Icons.groups_2_outlined,
+              label: cohort,
+            ),
+          ],
         ),
       ],
     );
@@ -8294,35 +15783,161 @@ class _AccountIdentityHeader extends StatelessWidget {
       icon: const Icon(Icons.edit_outlined),
       label: const Text('Tahrirlash'),
     );
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 460) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Container(
+      padding: EdgeInsets.all(compact ? 16 : 22),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colors.surfaceContainerLowest,
+            colors.primaryContainer.withValues(alpha: .42),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(Sf.radiusLarge),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 480) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    avatar,
+                    const SizedBox(width: 13),
+                    Expanded(child: details),
+                  ],
+                ),
+                const SizedBox(height: 13),
+                edit,
+              ],
+            );
+          }
+          return Row(
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  avatar,
-                  const SizedBox(width: 12),
-                  Expanded(child: details),
-                ],
-              ),
-              const SizedBox(height: 12),
+              avatar,
+              const SizedBox(width: 18),
+              Expanded(child: details),
+              const SizedBox(width: 16),
               edit,
             ],
           );
-        }
-        return Row(
-          children: [
-            avatar,
-            const SizedBox(width: 16),
-            Expanded(child: details),
-            const SizedBox(width: 12),
-            edit,
-          ],
-        );
-      },
+        },
+      ),
+    );
+  }
+}
+
+class _AccountMetaChip extends StatelessWidget {
+  const _AccountMetaChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 220),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: colors.surface.withValues(alpha: .82),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: colors.primary),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TechnicalProfileRows extends StatelessWidget {
+  const _TechnicalProfileRows({required this.profile});
+
+  final Map<String, Object?> profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final permissions = profile['effective_permissions'] is List
+        ? List<Object?>.from(profile['effective_permissions']! as List)
+        : profile['permission_codes'] is List
+        ? List<Object?>.from(profile['permission_codes']! as List)
+        : const <Object?>[];
+    final memberships = valueRows(profile['role_memberships']);
+    final rows = <(String, String)>[
+      ('Tenant', valueText(profile, const ['tenant_slug'])),
+      (
+        'Til',
+        valueText(profile, const ['organization_locale', 'preferred_language']),
+      ),
+      ('Vaqt mintaqasi', valueText(profile, const ['organization_timezone'])),
+      ('Valyuta', valueText(profile, const ['primary_currency'])),
+      ('Sessiya', valueText(profile, const ['session_id'])),
+      (
+        'Sessiya yaratilgan',
+        _dateLabel(profile['session_created_at'], time: true),
+      ),
+      (
+        'Oxirgi faollik',
+        _dateLabel(profile['session_last_activity_at'], time: true),
+      ),
+      (
+        'Sessiya tugashi',
+        _dateLabel(profile['session_expires_at'], time: true),
+      ),
+      ('Read-only', profile['read_only_session'] == true ? 'Ha' : 'Yo‘q'),
+      (
+        'Rollar',
+        memberships
+            .map(
+              (item) =>
+                  valueText(item, const ['role', 'role_name', 'account_kind']),
+            )
+            .join(', '),
+      ),
+      ('Ruxsatlar', permissions.join(', ')),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final row in rows)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 142,
+                  child: Text(
+                    row.$1,
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                ),
+                Expanded(
+                  child: SelectableText(
+                    row.$2.trim().isEmpty ? '—' : row.$2,
+                    style: const TextStyle(fontFamily: Sf.mono, fontSize: 11),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
@@ -8340,6 +15955,8 @@ class _ProfileEditScreenState extends State<_ProfileEditScreen> {
   late final TextEditingController _middle;
   late final TextEditingController _phone;
   late final TextEditingController _email;
+  late final TextEditingController _birthdate;
+  String _gender = '';
   bool _busy = false;
   String? _error;
 
@@ -8362,6 +15979,15 @@ class _ProfileEditScreenState extends State<_ProfileEditScreen> {
     _email = TextEditingController(
       text: valueText(profile, const ['email'], fallback: ''),
     );
+    _birthdate = TextEditingController(
+      text: valueText(profile, const ['birthdate'], fallback: ''),
+    );
+    final rawGender = '${profile['gender'] ?? ''}'.trim().toLowerCase();
+    _gender = switch (rawGender) {
+      'm' || 'male' => 'm',
+      'f' || 'female' => 'f',
+      _ => '',
+    };
   }
 
   @override
@@ -8371,6 +15997,7 @@ class _ProfileEditScreenState extends State<_ProfileEditScreen> {
     _middle.dispose();
     _phone.dispose();
     _email.dispose();
+    _birthdate.dispose();
     super.dispose();
   }
 
@@ -8386,6 +16013,10 @@ class _ProfileEditScreenState extends State<_ProfileEditScreen> {
         'middle_name': _middle.text.trim(),
         'phone': _phone.text.trim(),
         'email': _email.text.trim(),
+        'birthdate': _birthdate.text.trim().isEmpty
+            ? null
+            : _birthdate.text.trim(),
+        'gender': _gender,
       });
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -8435,6 +16066,48 @@ class _ProfileEditScreenState extends State<_ProfileEditScreen> {
                 controller: _email,
                 keyboardType: TextInputType.emailAddress,
                 decoration: const InputDecoration(labelText: 'Email'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _birthdate,
+                readOnly: true,
+                decoration: const InputDecoration(
+                  labelText: 'Tug‘ilgan sana',
+                  hintText: 'YYYY-MM-DD',
+                  suffixIcon: Icon(Icons.calendar_today_outlined),
+                ),
+                onTap: _busy
+                    ? null
+                    : () async {
+                        final now = DateTime.now();
+                        final selected = await showDatePicker(
+                          context: context,
+                          initialDate:
+                              DateTime.tryParse(_birthdate.text) ??
+                              DateTime(now.year - 18),
+                          firstDate: DateTime(now.year - 100),
+                          lastDate: now,
+                        );
+                        if (selected == null) return;
+                        _birthdate.text =
+                            '${selected.year.toString().padLeft(4, '0')}-${selected.month.toString().padLeft(2, '0')}-${selected.day.toString().padLeft(2, '0')}';
+                      },
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: _gender,
+                decoration: const InputDecoration(labelText: 'Jins'),
+                items: const [
+                  DropdownMenuItem<String>(
+                    value: '',
+                    child: Text('Ko‘rsatilmagan'),
+                  ),
+                  DropdownMenuItem(value: 'm', child: Text('Erkak')),
+                  DropdownMenuItem(value: 'f', child: Text('Ayol')),
+                ],
+                onChanged: _busy
+                    ? null
+                    : (value) => setState(() => _gender = value ?? ''),
               ),
               if (_error case final error?) ...[
                 const SizedBox(height: 14),

@@ -1100,7 +1100,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
   Future<void> _copySummary(BuildContext context) async {
     const summary =
-        'StarForge EDU · Akmalning haftalik hisoboti\n'
+        'Starforge Family · Akmalning haftalik hisoboti\n'
         'O‘rtacha natija: 88%\n'
         'Vazifalar: 9/11\n'
         'Davomat: 96%\n'

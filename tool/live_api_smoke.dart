@@ -14,6 +14,8 @@ Future<void> main() async {
   }
 
   final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
+  final requireFixtures =
+      environment['STARFORGE_REQUIRE_FIXTURES']?.trim().toLowerCase() == 'true';
   try {
     await _smokeRole(
       client: client,
@@ -21,6 +23,7 @@ Future<void> main() async {
       role: 'student',
       username: _required(environment, 'STARFORGE_STUDENT_USERNAME'),
       password: _required(environment, 'STARFORGE_STUDENT_PASSWORD'),
+      requireFixtures: requireFixtures,
     );
     await _smokeRole(
       client: client,
@@ -28,6 +31,7 @@ Future<void> main() async {
       role: 'parent',
       username: _required(environment, 'STARFORGE_PARENT_USERNAME'),
       password: _required(environment, 'STARFORGE_PARENT_PASSWORD'),
+      requireFixtures: requireFixtures,
     );
     stdout.writeln('Live student and parent API smoke checks passed.');
   } finally {
@@ -41,6 +45,7 @@ Future<void> _smokeRole({
   required String role,
   required String username,
   required String password,
+  required bool requireFixtures,
 }) async {
   final anonymous = _ApiProbe(client: client, baseUrl: baseUrl);
   final loginBody = <String, Object?>{
@@ -78,9 +83,9 @@ Future<void> _smokeRole({
     if ('${profile['principal_kind'] ?? ''}'.toLowerCase() != role) {
       throw StateError('$role /users/me/ returned another principal kind.');
     }
-    final permissions = _strings(profile['permission_codes']);
+    final permissions = _effectivePermissions(profile);
     final studentId = role == 'student'
-        ? _integer(profile['student_id']) ??
+        ? _integer(profile['id']) ??
               (_can(permissions, 'students:read')
                   ? await _resolveStudentId(api, profile)
                   : null)
@@ -97,21 +102,36 @@ Future<void> _smokeRole({
         await api.request('GET', '/api/v1/students/$studentId/');
         await api.request('GET', '/api/v1/students/$studentId/events/');
       }
+      await api.request(
+        'GET',
+        '/api/v1/students/comparison/',
+        query: {'metric': 'joined', 'unit': 'month'},
+      );
     }
     if (role == 'parent' && _can(permissions, 'parents:read')) {
-      await api.request('GET', '/api/v1/parents/', query: {'page_size': 1});
+      final parentId = _integer(profile['id']);
+      if (parentId != null) {
+        await api.request('GET', '/api/v1/parents/$parentId/');
+      } else {
+        await api.request('GET', '/api/v1/parents/', query: {'page_size': 1});
+      }
       await api.request(
         'GET',
         '/api/v1/parents/guardians/',
-        query: {'page_size': 1},
+        query: {'page_size': 1, 'parent': ?parentId, 'student': ?studentId},
       );
       await api.request(
         'GET',
         '/api/v1/parents/pickups/',
-        query: {'page_size': 1},
+        query: {'page_size': 1, 'student': ?studentId},
       );
     }
-    await _probeSharedDomains(api, permissions, studentId);
+    await _probeSharedDomains(
+      api,
+      permissions,
+      studentId,
+      requireFixtures: requireFixtures,
+    );
     await api.request('GET', '/api/v1/users/devices/', query: {'page_size': 1});
     stdout.writeln('$role API surface passed.');
   } finally {
@@ -161,8 +181,9 @@ Future<int?> _probeParentHome(_ApiProbe api) async {
 Future<void> _probeSharedDomains(
   _ApiProbe api,
   Set<String> permissions,
-  int? studentId,
-) async {
+  int? studentId, {
+  required bool requireFixtures,
+}) async {
   if (_can(permissions, 'assignments:read')) {
     await api.request('GET', '/api/v1/assignments/', query: {'page_size': 1});
     await api.request(
@@ -227,25 +248,50 @@ Future<void> _probeSharedDomains(
     }
   }
   if (_can(permissions, 'messaging:read')) {
-    await api.request(
-      'GET',
-      '/api/v1/messaging/contacts/',
-      query: {'page_size': 1},
+    final contacts = _rows(
+      await api.request(
+        'GET',
+        '/api/v1/messaging/contacts/',
+        query: {'page_size': 1},
+      ),
     );
-    await api.request(
-      'GET',
-      '/api/v1/messaging/threads/',
-      query: {'page_size': 1},
+    final threads = _rows(
+      await api.request(
+        'GET',
+        '/api/v1/messaging/threads/',
+        query: {'page_size': 1},
+      ),
     );
+    if (requireFixtures && (contacts.isEmpty || threads.isEmpty)) {
+      throw StateError(
+        'Fixture verification requires at least one messaging contact and thread.',
+      );
+    }
   }
   if (_can(permissions, 'notifications:read')) {
-    await api.request('GET', '/api/v1/notifications/', query: {'page_size': 1});
+    final notifications = _rows(
+      await api.request(
+        'GET',
+        '/api/v1/notifications/',
+        query: {'page_size': 1},
+      ),
+    );
     await api.request('GET', '/api/v1/notifications/unread-count/');
+    if (requireFixtures && notifications.isEmpty) {
+      throw StateError(
+        'Fixture verification requires at least one notification.',
+      );
+    }
   }
   if (_can(permissions, 'forms:read')) {
     await api.request('GET', '/api/v1/forms/', query: {'page_size': 1});
   }
   if (_can(permissions, 'achievements:read')) {
+    await api.request(
+      'GET',
+      '/api/v1/achievements/',
+      query: {'page_size': 1, 'status': 'active'},
+    );
     await api.request(
       'GET',
       '/api/v1/achievements/mine/',
@@ -376,11 +422,34 @@ List<Map<String, Object?>> _rows(Object? value) {
 Set<String> _strings(Object? value) =>
     value is List ? value.map((item) => '$item').toSet() : const <String>{};
 
+Set<String> _effectivePermissions(Map<String, Object?> profile) {
+  final effective = profile['effective_permissions'];
+  Object? raw = effective;
+  if (effective is Map) {
+    raw =
+        effective['permissions'] ??
+        effective['granted'] ??
+        effective['permission_codes'];
+  }
+  if (raw is! List) raw = profile['permission_codes'];
+  final granted = _strings(raw);
+  final revoked = <String>{
+    ..._strings(profile['revoked_permission_codes']),
+    if (effective is Map) ..._strings(effective['revoked']),
+  };
+  return {...granted, for (final code in revoked) '!$code'};
+}
+
 bool _can(Set<String> permissions, String permission) {
   final separator = permission.indexOf(':');
   final wildcard = separator < 0
       ? '$permission:*'
       : '${permission.substring(0, separator)}:*';
+  if (permissions.contains('!*:*') ||
+      permissions.contains('!$permission') ||
+      permissions.contains('!$wildcard')) {
+    return false;
+  }
   return permissions.contains('*:*') ||
       permissions.contains(permission) ||
       permissions.contains(wildcard);

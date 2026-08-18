@@ -1,6 +1,74 @@
+# yaml-language-server: $schema=https://codemagic.io/codemagic-schema.json
 workflows:
+  ios-quality:
+    name: Starforge Family iOS quality (no secrets required)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+
+    environment:
+      flutter: 3.44.1
+      xcode: latest
+      vars:
+        API_BASE_URL: "https://starforge.78.111.91.113.nip.io"
+        MINIMUM_LINE_COVERAGE: "20"
+
+    cache:
+      cache_paths:
+        - $FLUTTER_ROOT/.pub-cache
+
+    triggering:
+      events:
+        - push
+        - pull_request
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+      cancel_previous_builds: true
+
+    scripts:
+      - name: Enable Flutter Swift Package Manager
+        script: flutter config --enable-swift-package-manager
+
+      - name: Resolve Flutter dependencies
+        script: flutter pub get
+
+      - name: Verify formatting
+        script: dart format --output=none --set-exit-if-changed lib test tool
+
+      - name: Audit frontend calls against OpenAPI
+        script: >-
+          dart run tool/openapi_workflow_audit.dart
+          contracts/starforge-openapi.json
+          contracts/openapi-extensions.json
+          lib
+
+      - name: Analyze
+        script: flutter analyze --no-pub
+
+      - name: Run tests and enforce coverage floor
+        script: |
+          flutter test --no-pub --coverage --concurrency=1 -r expanded
+          dart run tool/verify_coverage.dart coverage/lcov.info "$MINIMUM_LINE_COVERAGE"
+
+      - name: Build unsigned iOS simulator app
+        script: |
+          test ! -f ios/Runner/GoogleService-Info.plist
+          flutter build ios --simulator --debug --no-pub \
+            --dart-define="API_BASE_URL=$API_BASE_URL"
+
+      - name: Verify graceful Firebase fallback
+        script: |
+          test -d build/ios/iphonesimulator/Runner.app
+          test ! -f build/ios/iphonesimulator/Runner.app/GoogleService-Info.plist
+          grep -q 'GoogleService-Info' ios/Runner/AppDelegate.swift
+
+    artifacts:
+      - build/ios/iphonesimulator/*.app
+      - coverage/lcov.info
+
   ios-release:
-    name: StarForge Family iOS release
+    name: Starforge Family iOS release
     instance_type: mac_mini_m2
     max_build_duration: 90
 
@@ -13,6 +81,7 @@ workflows:
       vars:
         API_BASE_URL: "https://starforge.78.111.91.113.nip.io"
         BUNDLE_ID: "com.starforge.starforgeStudent"
+        MINIMUM_LINE_COVERAGE: "20"
 
     cache:
       cache_paths:
@@ -20,19 +89,25 @@ workflows:
 
     triggering:
       events:
-        - push
         - tag
-      branch_patterns:
-        - pattern: main
+      tag_patterns:
+        - pattern: "v*"
           include: true
-          source: false
       cancel_previous_builds: true
 
     scripts:
       - name: Load and validate Firebase iOS configuration
         script: |
           set -eu
-          test -n "${IOS_FIREBASE_SECRET:-}"
+          if [ -z "${IOS_FIREBASE_SECRET:-}" ]; then
+            echo 'A signed iOS release requires the real GoogleService-Info.plist in IOS_FIREBASE_SECRET.'
+            echo 'The Android google-services.json file cannot be used for iOS.'
+            exit 1
+          fi
+          case "$API_BASE_URL" in
+            https://*) ;;
+            *) echo 'Production API_BASE_URL must use HTTPS.'; exit 1 ;;
+          esac
           FIREBASE_PLIST="$CM_BUILD_DIR/ios/Runner/GoogleService-Info.plist"
           printf '%s' "$IOS_FIREBASE_SECRET" > "$FIREBASE_PLIST"
           plutil -lint "$FIREBASE_PLIST"
@@ -42,6 +117,10 @@ workflows:
           FIREBASE_APP_ID="$(/usr/libexec/PlistBuddy -c 'Print :GOOGLE_APP_ID' "$FIREBASE_PLIST")"
           FIREBASE_BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :BUNDLE_ID' "$FIREBASE_PLIST")"
           FIREBASE_STORAGE_BUCKET="$(/usr/libexec/PlistBuddy -c 'Print :STORAGE_BUCKET' "$FIREBASE_PLIST" 2>/dev/null || true)"
+          test -n "$FIREBASE_PROJECT_ID"
+          test -n "$FIREBASE_SENDER_ID"
+          test -n "$FIREBASE_API_KEY"
+          test -n "$FIREBASE_APP_ID"
           test "$FIREBASE_BUNDLE_ID" = "$BUNDLE_ID"
           {
             printf 'STARFORGE_FIREBASE_PROJECT_ID=%s\n' "$FIREBASE_PROJECT_ID"
@@ -58,6 +137,8 @@ workflows:
           test -n "${APP_STORE_CONNECT_ISSUER_ID:-}"
           test -n "${APP_STORE_CONNECT_PRIVATE_KEY:-}"
           test -n "${CERTIFICATE_PRIVATE_KEY:-}"
+          printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY" | grep -q -- '-----BEGIN PRIVATE KEY-----'
+          printf '%s' "$CERTIFICATE_PRIVATE_KEY" | grep -Eq -- '-----BEGIN (RSA |EC )?PRIVATE KEY-----'
 
       - name: Enable Flutter Swift Package Manager
         script: flutter config --enable-swift-package-manager
@@ -78,8 +159,10 @@ workflows:
       - name: Analyze
         script: flutter analyze --no-pub
 
-      - name: Run tests
-        script: flutter test --no-pub --concurrency=1 -r expanded
+      - name: Run tests and enforce coverage floor
+        script: |
+          flutter test --no-pub --coverage --concurrency=1 -r expanded
+          dart run tool/verify_coverage.dart coverage/lcov.info "$MINIMUM_LINE_COVERAGE"
 
       - name: Configure App Store signing
         script: |
@@ -92,6 +175,7 @@ workflows:
 
       - name: Build signed iOS IPA
         script: |
+          test "${PROJECT_BUILD_NUMBER:-}" -gt 0
           flutter build ipa --release --no-pub \
             --build-number="$PROJECT_BUILD_NUMBER" \
             --dart-define="API_BASE_URL=$API_BASE_URL" \
@@ -99,7 +183,7 @@ workflows:
             --dart-define="STARFORGE_FIREBASE_MESSAGING_SENDER_ID=$STARFORGE_FIREBASE_MESSAGING_SENDER_ID" \
             --dart-define="STARFORGE_FIREBASE_IOS_API_KEY=$STARFORGE_FIREBASE_IOS_API_KEY" \
             --dart-define="STARFORGE_FIREBASE_IOS_APP_ID=$STARFORGE_FIREBASE_IOS_APP_ID" \
-            --dart-define="STARFORGE_FIREBASE_IOS_BUNDLE_ID=com.starforge.starforgeStudent" \
+            --dart-define="STARFORGE_FIREBASE_IOS_BUNDLE_ID=$BUNDLE_ID" \
             --dart-define="STARFORGE_FIREBASE_STORAGE_BUCKET=${STARFORGE_FIREBASE_STORAGE_BUCKET:-}" \
             --export-options-plist=/Users/builder/export_options.plist
 
@@ -114,21 +198,32 @@ workflows:
           test -n "$APP_PATH"
           ACTUAL_BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
           test "$ACTUAL_BUNDLE_ID" = "$BUNDLE_ID"
+          /usr/libexec/PlistBuddy -c 'Print :UIBackgroundModes' "$APP_PATH/Info.plist" | grep -q 'remote-notification'
           codesign --verify --deep --strict "$APP_PATH"
-          codesign -d --entitlements :- "$APP_PATH" > "$CHECK_DIR/app-entitlements.plist"
+          codesign -d --entitlements :- "$APP_PATH" > "$CHECK_DIR/app-entitlements.plist" 2>/dev/null
+          plutil -lint "$CHECK_DIR/app-entitlements.plist"
           test "$(/usr/libexec/PlistBuddy -c 'Print :aps-environment' "$CHECK_DIR/app-entitlements.plist")" = "production"
           test -f "$APP_PATH/embedded.mobileprovision"
           security cms -D -i "$APP_PATH/embedded.mobileprovision" > "$CHECK_DIR/profile.plist"
+          plutil -lint "$CHECK_DIR/profile.plist"
           test "$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:aps-environment' "$CHECK_DIR/profile.plist")" = "production"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:get-task-allow' "$CHECK_DIR/profile.plist")" = "false"
+          APPLICATION_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$CHECK_DIR/profile.plist")"
+          case "$APPLICATION_IDENTIFIER" in
+            *."$BUNDLE_ID") ;;
+            *) echo 'Provisioning profile does not match the application bundle ID.'; exit 1 ;;
+          esac
+          grep -aRqF "$STARFORGE_FIREBASE_PROJECT_ID" "$APP_PATH/Frameworks/App.framework"
+          grep -aRqF "$STARFORGE_FIREBASE_IOS_APP_ID" "$APP_PATH/Frameworks/App.framework"
 
     artifacts:
       - build/ios/ipa/*.ipa
       - build/ios/archive/*.xcarchive
+      - coverage/lcov.info
       - /tmp/xcodebuild_logs/*.log
 
     publishing:
       app_store_connect:
-        auth: api_key
         api_key: $APP_STORE_CONNECT_PRIVATE_KEY
         key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID

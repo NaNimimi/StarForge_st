@@ -118,6 +118,7 @@ class DeviceNotificationService {
       android: AndroidNotificationDetails(
         channelId,
         _channelName,
+        icon: 'ic_stat_starforge',
         channelDescription: _channelDescription,
         importance: Importance.max,
         priority: Priority.max,
